@@ -18,6 +18,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 #include "userinterface.h"
+#include "version.h"
 #include "minijv880.h"
 #include "emulator/mcu.h"
 #include <circle/logger.h>
@@ -167,7 +168,8 @@ bool CUserInterface::Initialize (void)
 		assert (m_pLCDBuffered);
 
 		LCDWrite ("\x1B[?25l\x1B""d+");		// cursor off, autopage mode
-		LCDWrite ("MiniJV880\nLoading...");
+		LCDWrite ("MiniJV880\n");
+		LCDWrite (VERSION_STRING);
 		m_pLCDBuffered->Update ();
 
 		LOGDBG ("LCD initialized");
