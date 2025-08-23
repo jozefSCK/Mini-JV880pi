@@ -169,7 +169,7 @@ bool CUserInterface::Initialize (void)
 
 		LCDWrite ("\x1B[?25l\x1B""d+");		// cursor off, autopage mode
 		LCDWrite ("MiniJV880\n");
-		LCDWrite (VERSION_STRING);
+		LCDWrite (VERSION_SHORT);
 		m_pLCDBuffered->Update ();
 
 		LOGDBG ("LCD initialized");
