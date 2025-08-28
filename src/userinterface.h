@@ -42,6 +42,7 @@ public:
 	bool Initialize (void);
 
 	void Process (void);
+	void LCDInit(void);
 
 	void LCDWrite (const char *pString);		// Print to optional HD44780 display
 

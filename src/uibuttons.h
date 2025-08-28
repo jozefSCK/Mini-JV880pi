@@ -27,7 +27,8 @@
 #define BUTTONS_UPDATE_NUM_TICKS 100
 #define DEBOUNCE_TIME 20
 #define MAX_GPIO_BUTTONS 14  // 14 UI buttons
-#define MAX_BUTTONS (MAX_GPIO_BUTTONS)
+#define MAX_MIDI_BUTTONS 11
+#define MAX_BUTTONS (MAX_GPIO_BUTTONS+MAX_MIDI_BUTTONS)
 
 class CUIButtons;
 
@@ -126,7 +127,23 @@ public:
 			unsigned monitorPin, const char *monitorAction,
 			unsigned comparePin, const char *compareAction,
 			unsigned enterPin, const char *enterAction,
-			unsigned doubleClickTimeout, unsigned longPressTimeout
+			
+			unsigned doubleClickTimeout, unsigned longPressTimeout,
+
+			unsigned previewMidi = 0,
+			unsigned leftMidi = 0,
+			unsigned rightMidi = 0,
+			unsigned dataMidi = 0,
+			unsigned toneSelectMidi = 0,
+			unsigned patchPerformMidi = 0,
+			unsigned editMidi = 0,
+			unsigned systemMidi = 0,
+			unsigned rhythmMidi = 0,
+			unsigned utilityMidi = 0,
+			unsigned muteMidi = 0,
+			unsigned monitorMidi = 0,
+			unsigned compareMidi = 0,
+			unsigned enterMidi = 0
 	);
 	~CUIButtons (void);
 	
@@ -176,6 +193,21 @@ private:
 	CUIButton::BtnTrigger m_compareAction;
 	unsigned m_enterPin;
 	CUIButton::BtnTrigger m_enterAction;
+
+	unsigned m_previewMidi;
+    unsigned m_leftMidi;
+    unsigned m_rightMidi;
+    unsigned m_dataMidi;
+    unsigned m_toneSelectMidi;
+    unsigned m_patchPerformMidi;
+    unsigned m_editMidi;
+    unsigned m_systemMidi;
+    unsigned m_rhythmMidi;
+    unsigned m_utilityMidi;
+    unsigned m_muteMidi;
+    unsigned m_monitorMidi;
+    unsigned m_compareMidi;
+    unsigned m_enterMidi;
 
 	BtnEventHandler *m_eventHandler;
 	void *m_eventParam;

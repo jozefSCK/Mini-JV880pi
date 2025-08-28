@@ -84,7 +84,7 @@ private:
   unsigned m_lastTick1;
 
   static CMiniJV880 *s_pThis;
-  
+  unsigned n_mMCUcycles = 9;
   
 
 

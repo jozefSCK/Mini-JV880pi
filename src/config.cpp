@@ -35,6 +35,7 @@ void CConfig::Load (void)
 {
 	m_Properties.Load ();
 	
+	m_nMCUcycles = m_Properties.GetNumber ("MCUcycles", 11);
 	m_SoundDevice = m_Properties.GetString ("SoundDevice", "pwm");
 
 	if (m_SoundDevice == "hdmi") {
@@ -117,6 +118,22 @@ void CConfig::Load (void)
 	m_ButtonActionCompare = m_Properties.GetString ("ButtonActionCompare", "");
 	m_ButtonActionEnter = m_Properties.GetString("ButtonActionEnter", "click");
 
+	// MIDI buttons
+	m_nMIDIButtonPreview = m_Properties.GetNumber("MIDIButtonPreview", 0);
+	m_nMIDIButtonLeft = m_Properties.GetNumber("MIDIButtonLeft", 0);
+	m_nMIDIButtonRight = m_Properties.GetNumber("MIDIButtonRight", 0);
+	m_nMIDIButtonData = m_Properties.GetNumber("MIDIButtonData", 0);
+	m_nMIDIButtonToneSelect = m_Properties.GetNumber("MIDIButtonToneSelect", 0);
+	m_nMIDIButtonPatchPerform = m_Properties.GetNumber("MIDIButtonPatchPerform", 0);
+	m_nMIDIButtonEdit = m_Properties.GetNumber("MIDIButtonEdit", 0);
+	m_nMIDIButtonSystem = m_Properties.GetNumber("MIDIButtonSystem", 0);
+	m_nMIDIButtonRhythm = m_Properties.GetNumber("MIDIButtonRhythm", 0);
+	m_nMIDIButtonUtility = m_Properties.GetNumber("MIDIButtonUtility", 0);
+	m_nMIDIButtonMute = m_Properties.GetNumber("MIDIButtonMute", 0);
+	m_nMIDIButtonMonitor = m_Properties.GetNumber("MIDIButtonMonitor", 0);
+	m_nMIDIButtonCompare = m_Properties.GetNumber("MIDIButtonCompare", 0);
+	m_nMIDIButtonEnter = m_Properties.GetNumber("MIDIButtonEnter", 0);
+
 	m_nDoubleClickTimeout = m_Properties.GetNumber ("DoubleClickTimeout", 400);
 	m_nLongPressTimeout = m_Properties.GetNumber ("LongPressTimeout", 600);
 
@@ -125,6 +142,11 @@ void CConfig::Load (void)
 	m_nEncoderPinData = m_Properties.GetNumber ("EncoderPinData", 9);
 
 	m_bProfileEnabled = m_Properties.GetNumber ("ProfileEnabled", 0) != 0;
+}
+
+unsigned CConfig::GetMCUcycles (void) const
+{
+	return m_nMCUcycles;
 }
 
 const char *CConfig::GetSoundDevice (void) const
@@ -430,6 +452,76 @@ const char *CConfig::GetButtonActionCompare (void) const
 const char *CConfig::GetButtonActionEnter (void) const
 {
 	return m_ButtonActionEnter.c_str();
+}
+
+unsigned CConfig::GetMIDIButtonPreview (void) const
+{
+    return m_nMIDIButtonPreview;
+}
+
+unsigned CConfig::GetMIDIButtonLeft (void) const
+{
+    return m_nMIDIButtonLeft;
+}
+
+unsigned CConfig::GetMIDIButtonRight (void) const
+{
+    return m_nMIDIButtonRight;
+}
+
+unsigned CConfig::GetMIDIButtonData (void) const
+{
+    return m_nMIDIButtonData;
+}
+
+unsigned CConfig::GetMIDIButtonToneSelect (void) const
+{
+    return m_nMIDIButtonToneSelect;
+}
+
+unsigned CConfig::GetMIDIButtonPatchPerform (void) const
+{
+    return m_nMIDIButtonPatchPerform;
+}
+
+unsigned CConfig::GetMIDIButtonEdit (void) const
+{
+    return m_nMIDIButtonEdit;
+}
+
+unsigned CConfig::GetMIDIButtonSystem (void) const
+{
+    return m_nMIDIButtonSystem;
+}
+
+unsigned CConfig::GetMIDIButtonRhythm (void) const
+{
+    return m_nMIDIButtonRhythm;
+}
+
+unsigned CConfig::GetMIDIButtonUtility (void) const
+{
+    return m_nMIDIButtonUtility;
+}
+
+unsigned CConfig::GetMIDIButtonMute (void) const
+{
+    return m_nMIDIButtonMute;
+}
+
+unsigned CConfig::GetMIDIButtonMonitor (void) const
+{
+    return m_nMIDIButtonMonitor;
+}
+
+unsigned CConfig::GetMIDIButtonCompare (void) const
+{
+    return m_nMIDIButtonCompare;
+}
+
+unsigned CConfig::GetMIDIButtonEnter (void) const
+{
+    return m_nMIDIButtonEnter;
 }
 
 bool CConfig::GetEncoderEnabled (void) const

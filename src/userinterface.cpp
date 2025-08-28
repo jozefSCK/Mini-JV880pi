@@ -168,8 +168,8 @@ bool CUserInterface::Initialize (void)
 		assert (m_pLCDBuffered);
 
 		LCDWrite ("\x1B[?25l\x1B""d+");		// cursor off, autopage mode
-		LCDWrite ("MiniJV880\n");
-		LCDWrite (VERSION_SHORT);
+		LCDWrite ("Start MiniJV880\n");
+		LCDWrite ("version %s"VERSION_SHORT);
 		m_pLCDBuffered->Update ();
 
 		LOGDBG ("LCD initialized");
@@ -262,7 +262,7 @@ void CUserInterface::Process (void)
 	CString Msg ("\x1B[H\E[?25l");
 	for (int i = 0; i < 2; i++)
 	{
-		// Берём исходную строку длиной 24 символа
+		// Standard line 24
 		std::string line;
 		line.reserve(ACTUAL_COLS);
 		for (int j = 0; j < ACTUAL_COLS; j++) {
@@ -270,25 +270,25 @@ void CUserInterface::Process (void)
 			line.push_back(ch);
 		}
 
-		// Ужимаем, пока длина > 20
+		// Stretch > 20
 		while ((int)line.size() > displayCols) {
-			// 1. Убираем двойные пробелы
+			// 1. double spaces
 			size_t pos = line.find("  ");
 			if (pos != std::string::npos) {
-				line.erase(pos, 1); // убираем один пробел
+				line.erase(pos, 1); // one space
 				continue;
 			}
-			// 2. Убираем одиночные пробелы
+			// 2. one spaces
 			pos = line.find(' ');
 			if (pos != std::string::npos) {
 				line.erase(pos, 1);
 				continue;
 			}
-			// 3. Если пробелов больше нет — жёстко обрезаем
+			// 3. If no spaces - cut
 			line.resize(displayCols);
 		}
 
-		// Теперь рисуем
+		// Draw
 		for (int j = 0; j < displayCols; j++)
 		{
 			char ch = (j < (int)line.size()) ? line[j] : ' ';
@@ -296,7 +296,7 @@ void CUserInterface::Process (void)
 			int ii = m_pMiniJV880->mcu.lcd.LCD_DD_RAM / 0x40;
 
 			if (i == ii && j == jj && ii < 2 && jj < ACTUAL_COLS && m_pMiniJV880->mcu.lcd.LCD_C) {
-				// курсор
+				// cursor
 				Msg.Append("_");
 			} else {
 				Msg.Append(std::string(1, ch).c_str());

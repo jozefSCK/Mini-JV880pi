@@ -92,6 +92,10 @@ bool CMiniJV880::Initialize(void) {
   assert(m_pConfig);
   assert(m_pSoundDevice);
 
+  n_mMCUcycles = m_pConfig->GetMCUcycles ();
+  LOGNOTE("MCU cycles %d", n_mMCUcycles);
+  //LOGNOTE("Temp: %d", m_CPUThrottle.GetTemperature ());
+
   if (!m_UI.Initialize ())
 	{
     LOGERR("Failed to initialize UI");
@@ -290,7 +294,7 @@ void CMiniJV880::Run(unsigned nCore) {
           if (!mcu.mcu.sleep)
             mcu.MCU_ReadInstruction();
 
-          mcu.mcu.cycles += 10; // FIXME: assume 12 cycles per instruction
+          mcu.mcu.cycles += n_mMCUcycles; // FIXME: assume 12 cycles per instruction
 
           mcu.TIMER_Clock(mcu.mcu.cycles);
           mcu.MCU_UpdateUART_RX();

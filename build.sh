@@ -54,7 +54,7 @@ cd ..
     else
         VERSION="unknown-$(date +%Y%m%d)"
     fi
-    cd ..
+    
 
 # Create version.h
 cat > src/version.h << EOF

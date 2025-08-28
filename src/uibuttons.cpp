@@ -25,6 +25,11 @@
 
 LOGMODULE ("uibuttons");
 
+static unsigned ccToMidiPin (unsigned nCC)
+{
+	return nCC;
+}
+
 CUIButton::CUIButton (void)
 :	m_pinNumber (0),
 	m_pin (0),
@@ -241,7 +246,21 @@ CUIButtons::CUIButtons (
 			unsigned monitorPin, const char *monitorAction,
 			unsigned comparePin, const char *compareAction,
 			unsigned enterPin, const char *enterAction,
-			unsigned doubleClickTimeout, unsigned longPressTimeout
+			unsigned doubleClickTimeout, unsigned longPressTimeout,
+			unsigned previewMidi,
+			unsigned leftMidi,
+			unsigned rightMidi,
+			unsigned dataMidi,
+			unsigned toneSelectMidi,
+			unsigned patchPerformMidi,
+			unsigned editMidi,
+			unsigned systemMidi,
+			unsigned rhythmMidi,
+			unsigned utilityMidi,
+			unsigned muteMidi,
+			unsigned monitorMidi,
+			unsigned compareMidi,
+			unsigned enterMidi
 )
 :	m_doubleClickTimeout(doubleClickTimeout),
 	m_longPressTimeout(longPressTimeout),
@@ -259,6 +278,20 @@ CUIButtons::CUIButtons (
 	m_monitorPin(monitorPin), m_monitorAction(CUIButton::triggerTypeFromString(monitorAction)),
 	m_comparePin(comparePin), m_compareAction(CUIButton::triggerTypeFromString(compareAction)),
 	m_enterPin(enterPin), m_enterAction(CUIButton::triggerTypeFromString(enterAction)),
+	m_previewMidi(previewMidi),
+	m_leftMidi(leftMidi),
+	m_rightMidi(rightMidi),
+	m_dataMidi(dataMidi),
+	m_toneSelectMidi(toneSelectMidi),
+	m_patchPerformMidi(patchPerformMidi),
+	m_editMidi(editMidi),
+	m_systemMidi(systemMidi),
+	m_rhythmMidi(rhythmMidi),
+	m_utilityMidi(utilityMidi),
+	m_muteMidi(muteMidi),
+	m_monitorMidi(monitorMidi),
+	m_compareMidi(compareMidi),
+	m_enterMidi(enterMidi),
 	m_eventHandler (0),
 	m_lastTick (0)
 {
@@ -268,8 +301,57 @@ CUIButtons::~CUIButtons (void)
 {
 }
 
-boolean CUIButtons::Initialize (void)
+boolean CUIButtons::Initialize (void)	
 {
+	//assert (m_pConfig);
+
+	m_doubleClickTimeout = m_pConfig->GetDoubleClickTimeout();
+	m_longPressTimeout = m_pConfig->GetLongPressTimeout();
+	m_previewPin = m_pConfig->GetButtonPinPreview();
+	m_previewAction = CUIButton::triggerTypeFromString(m_pConfig->GetButtonActionPreview());
+	m_leftPin = m_pConfig->GetButtonPinLeft();
+	m_leftAction = CUIButton::triggerTypeFromString(m_pConfig->GetButtonActionLeft());
+	m_rightPin = m_pConfig->GetButtonPinRight();
+	m_rightAction = CUIButton::triggerTypeFromString(m_pConfig->GetButtonActionRight());
+	m_dataPin = m_pConfig->GetButtonPinData();
+	m_dataAction = CUIButton::triggerTypeFromString(m_pConfig->GetButtonActionData());
+	m_toneSelectPin = m_pConfig->GetButtonPinToneSelect();
+	m_toneSelectAction = CUIButton::triggerTypeFromString(m_pConfig->GetButtonActionToneSelect());
+	m_patchPerformPin = m_pConfig->GetButtonPinPatchPerform();
+	m_patchPerformAction = CUIButton::triggerTypeFromString(m_pConfig->GetButtonActionPatchPerform());
+	m_editPin = m_pConfig->GetButtonPinEdit();
+	m_editAction = CUIButton::triggerTypeFromString(m_pConfig->GetButtonActionEdit());
+	m_systemPin = m_pConfig->GetButtonPinSystem();
+	m_systemAction = CUIButton::triggerTypeFromString(m_pConfig->GetButtonActionSystem());
+	m_rhythmPin = m_pConfig->GetButtonPinRhythm();
+	m_rhythmAction = CUIButton::triggerTypeFromString(m_pConfig->GetButtonActionRhythm());
+	m_utilityPin = m_pConfig->GetButtonPinUtility();
+	m_utilityAction = CUIButton::triggerTypeFromString(m_pConfig->GetButtonActionUtility());
+	m_mutePin = m_pConfig->GetButtonPinMute();
+	m_muteAction = CUIButton::triggerTypeFromString(m_pConfig->GetButtonActionMute());
+	m_monitorPin = m_pConfig->GetButtonPinMonitor();
+	m_monitorAction = CUIButton::triggerTypeFromString(m_pConfig->GetButtonActionMonitor());
+	m_comparePin = m_pConfig->GetButtonPinCompare();
+	m_compareAction = CUIButton::triggerTypeFromString(m_pConfig->GetButtonActionCompare());
+	m_enterPin = m_pConfig->GetButtonPinEnter();
+	m_enterAction = CUIButton::triggerTypeFromString(m_pConfig->GetButtonActionEnter());
+
+	m_previewMidi = ccToMidiPin(m_pConfig->GetMIDIButtonPreview());
+	m_leftMidi = ccToMidiPin(m_pConfig->GetMIDIButtonLeft());
+	m_rightMidi = ccToMidiPin(m_pConfig->GetMIDIButtonRight());
+	m_dataMidi = ccToMidiPin(m_pConfig->GetMIDIButtonData());
+	m_toneSelectMidi = ccToMidiPin(m_pConfig->GetMIDIButtonToneSelect());
+	m_patchPerformMidi = ccToMidiPin(m_pConfig->GetMIDIButtonPatchPerform());
+	m_editMidi = ccToMidiPin(m_pConfig->GetMIDIButtonEdit());
+	m_systemMidi = ccToMidiPin(m_pConfig->GetMIDIButtonSystem());
+	m_rhythmMidi = ccToMidiPin(m_pConfig->GetMIDIButtonRhythm());
+	m_utilityMidi = ccToMidiPin(m_pConfig->GetMIDIButtonUtility());
+	m_muteMidi = ccToMidiPin(m_pConfig->GetMIDIButtonMute());
+	m_monitorMidi = ccToMidiPin(m_pConfig->GetMIDIButtonMonitor());
+	m_compareMidi = ccToMidiPin(m_pConfig->GetMIDIButtonCompare());
+	m_enterMidi = ccToMidiPin(m_pConfig->GetMIDIButtonEnter());
+	
+
 	// First sanity check and convert the timeouts:
 	// Internally values are in tenths of a millisecond, but config values
 	// are in milliseconds
