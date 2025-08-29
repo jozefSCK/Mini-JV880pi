@@ -84,7 +84,10 @@ bool CUserInterface::Initialize (void)
     m_nMIDIEnter = 			m_pConfig->GetMIDIButtonEnter() & 0x7F; 
 
 	
-	LCDInit();
+	if (!LCDInit()) {
+		LOGNOTE("Display init error");
+		return false;
+	}
 
 	m_pUIButtons = new CUIButtons (
                   m_pConfig->GetButtonPinPreview (), m_pConfig->GetButtonActionPreview (),
@@ -168,6 +171,81 @@ void CUserInterface::Process (void)
   //       // m_ScreenUnbuffered->SetPixel(x + 800, y + 300, pixel ? 0xFFFF : 0x0000);
   //     }
   //   }
+
+  // Test code
+/*int displayCols = m_pConfig->GetLCDColumns();
+CString Msg("\x1B[H\x1B[?25l");
+
+for (int i = 0; i < 2; i++)
+{
+    // Read full 40-character line from buffer
+    std::string line;
+    for (int j = 0; j < 40; j++) {
+        uint8_t ch = m_pMiniJV880->mcu.lcd.LCD_Data[i * 40 + j];
+        line.push_back(ch);
+    }
+
+    // Gently remove spaces one by one, checking length after each removal
+    while (static_cast<int>(line.size()) > displayCols) {
+        bool spaceRemoved = false;
+        
+        // 1. Try to remove one space from double spaces
+        size_t pos = line.find("  ");
+        if (pos != std::string::npos) {
+            line.erase(pos, 1); // remove only one space
+            spaceRemoved = true;
+            continue; // IMMEDIATELY check length again
+        }
+        
+        // 2. If no double spaces, try removing single spaces
+        if (!spaceRemoved) {
+            pos = line.find(' ');
+            if (pos != std::string::npos) {
+                line.erase(pos, 1); // remove one single space
+                spaceRemoved = true;
+                continue; // IMMEDIATELY check length again
+            }
+        }
+        
+        // 3. If no spaces found at all - truncate
+        if (!spaceRemoved) {
+            line.resize(displayCols);
+            break;
+        }
+    }
+
+    // Draw line
+    for (int j = 0; j < displayCols; j++)
+    {
+        char ch = (j < static_cast<int>(line.size())) ? line[static_cast<size_t>(j)] : ' ';
+        
+        // Calculate cursor position in original buffer
+        int cursor_pos = m_pMiniJV880->mcu.lcd.LCD_DD_RAM;
+        int cursor_line = cursor_pos / 40;
+        int cursor_col = cursor_pos % 40;
+
+        // Check if cursor should be displayed at this position
+        bool show_cursor = (i == cursor_line && j == cursor_col && 
+                           cursor_col < displayCols && 
+                           m_pMiniJV880->mcu.lcd.LCD_C);
+
+        if (show_cursor) {
+            Msg.Append("_"); // cursor
+        } else {
+            Msg.Append(std::string(1, ch).c_str());
+        }
+    }
+    
+    // Add newline between lines
+    if (i == 0) {
+        Msg.Append("\n");
+    }
+}
+
+LCDWrite(Msg);*/
+
+//MY ROUTINE
+  /*
 	int displayCols = m_pConfig->GetLCDColumns();
 	CString Msg ("\x1B[H\E[?25l");
 	for (int i = 0; i < 2; i++)
@@ -214,9 +292,13 @@ void CUserInterface::Process (void)
 		}
 	}
 
-	LCDWrite(Msg);
+	LCDWrite(Msg);*/
 
-	/*for (int i = 0; i < 2; i++)
+
+// SCROLL ROUTINE
+	int displayCols = m_pConfig->GetLCDColumns();
+	CString Msg ("\x1B[H\E[?25l");
+	for (int i = 0; i < 2; i++)
 	{
 		unsigned long currentTime = CTimer::GetClockTicks();
 
@@ -270,10 +352,10 @@ void CUserInterface::Process (void)
 			}
 		}
 	}
-	LCDWrite(Msg);*/
+	LCDWrite(Msg);
 }
 
-void CUserInterface::LCDInit()
+bool CUserInterface::LCDInit()
 {
 if (m_pConfig->GetLCDEnabled ())
 	{
@@ -384,6 +466,7 @@ if (m_pConfig->GetLCDEnabled ())
 
 		LOGDBG ("LCD initialized");
 	}	
+	return true;
 }
 
 void CUserInterface::LCDWrite (const char *pString)
@@ -540,21 +623,3 @@ void CUserInterface::TriggerUIButtonEvent(CUIButton::BtnEvent event)
     }
 }
 
-void CUserInterface::UpdateMIDIButtonConfig()
-{
-    m_nMIDIButtonCh = m_pConfig->GetMIDIButtonCh();
-    m_nPreviewCC = m_pConfig->GetMIDIButtonPreview() & 0x7F;
-    m_nLeftCC = m_pConfig->GetMIDIButtonLeft() & 0x7F;
-    m_nRightCC = m_pConfig->GetMIDIButtonRight() & 0x7F;
-    m_nDataCC = m_pConfig->GetMIDIButtonData() & 0x7F;
-    m_nToneSelectCC = m_pConfig->GetMIDIButtonToneSelect() & 0x7F;
-    m_nPatchPerformCC = m_pConfig->GetMIDIButtonPatchPerform() & 0x7F;
-    m_nEditCC = m_pConfig->GetMIDIButtonEdit() & 0x7F;
-    m_nSystemCC = m_pConfig->GetMIDIButtonSystem() & 0x7F;
-    m_nRhythmCC = m_pConfig->GetMIDIButtonRhythm() & 0x7F;
-    m_nUtilityCC = m_pConfig->GetMIDIButtonUtility() & 0x7F;
-    m_nMuteCC = m_pConfig->GetMIDIButtonMute() & 0x7F;
-    m_nMonitorCC = m_pConfig->GetMIDIButtonMonitor() & 0x7F;
-    m_nCompareCC = m_pConfig->GetMIDIButtonCompare() & 0x7F;
-    m_nEnterCC = m_pConfig->GetMIDIButtonEnter() & 0x7F;
-}

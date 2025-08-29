@@ -137,6 +137,8 @@ public:
 	const char *GetButtonActionCompare (void) const;
 	const char *GetButtonActionEnter (void) const;
 
+	// MIDI buttons navigation
+	unsigned GetMIDIButtonCh   (void) const;
 	unsigned GetMIDIButtonPreview (void) const;
     unsigned GetMIDIButtonLeft (void) const;
     unsigned GetMIDIButtonRight (void) const;
@@ -241,6 +243,7 @@ private:
 	std::string m_ButtonActionCompare;
 	std::string m_ButtonActionEnter;
 
+	unsigned m_nMIDIButtonCh;
 	unsigned m_nMIDIButtonPreview;
     unsigned m_nMIDIButtonLeft;
     unsigned m_nMIDIButtonRight;

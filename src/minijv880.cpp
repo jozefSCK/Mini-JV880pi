@@ -222,76 +222,89 @@ void CMiniJV880::ParseMIDIData(CMiniJV880* pThis, const u8* pData, unsigned nLen
         {
             u8 ccNumber = pData[i + 1];
             u8 ccValue = pData[i + 2];
-            
-            // Use cached MIDI button configuration
-            if (pThis->m_UI.m_nMIDIButtonChannel != 0) 
+           
+           if (pThis->m_UI.m_nMIDIButtonChannel != 0 && ccValue > 0) 
             {
-                bool channelMatch = (pThis->m_UI.m_nMIDIButtonChannel == 0xFF) || 
-                                  ((pThis->m_UI.m_nMIDIButtonChannel - 1) == (status & 0x0F));
+                u8 channel = status & 0x0F;
+                u8 expectedChannel = pThis->m_UI.m_nMIDIButtonChannel - 1;
                 
-                if (channelMatch && ccValue > 0) 
+                // OMNI режим при m_nMIDIButtonChannel = 17, иначе проверка канала
+                if (pThis->m_UI.m_nMIDIButtonChannel == 17 || expectedChannel == channel) 
                 {
-                    // Direct access to cached values
+                    // Быстрая проверка кнопок
                     if (ccNumber == pThis->m_UI.m_nMIDIPreview) {
                         pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventPreview);
-                        goto skip_normal_cc;
+                        i += 2;
+                        continue;
                     }
-                    else if (ccNumber == pThis->m_UI.m_nMIDILeft) {
+                    if (ccNumber == pThis->m_UI.m_nMIDILeft) {
                         pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventLeft);
-                        goto skip_normal_cc;
+                        i += 2;
+                        continue;
                     }
-                    else if (ccNumber == pThis->m_UI.m_nMIDIRight) {
+                    if (ccNumber == pThis->m_UI.m_nMIDIRight) {
                         pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventRight);
-                        goto skip_normal_cc;
+                        i += 2;
+                        continue;
                     }
-                    else if (ccNumber == pThis->m_UI.m_nMIDIData) {
+                    if (ccNumber == pThis->m_UI.m_nMIDIData) {
                         pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventData);
-                        goto skip_normal_cc;
+                        i += 2;
+                        continue;
                     }
-                    else if (ccNumber == pThis->m_UI.m_nMIDIToneSelect) {
+                    if (ccNumber == pThis->m_UI.m_nMIDIToneSelect) {
                         pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventToneSelect);
-                        goto skip_normal_cc;
+                        i += 2;
+                        continue;
                     }
-                    else if (ccNumber == pThis->m_UI.m_nMIDIPatchPerform) {
+                    if (ccNumber == pThis->m_UI.m_nMIDIPatchPerform) {
                         pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventPatchPerform);
-                        goto skip_normal_cc;
+                        i += 2;
+                        continue;
                     }
-                    else if (ccNumber == pThis->m_UI.m_nMIDIEdit) {
+                    if (ccNumber == pThis->m_UI.m_nMIDIEdit) {
                         pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventEdit);
-                        goto skip_normal_cc;
+                        i += 2;
+                        continue;
                     }
-                    else if (ccNumber == pThis->m_UI.m_nMIDISystem) {
+                    if (ccNumber == pThis->m_UI.m_nMIDISystem) {
                         pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventSystem);
-                        goto skip_normal_cc;
+                        i += 2;
+                        continue;
                     }
-                    else if (ccNumber == pThis->m_UI.m_nMIDIRhythm) {
+                    if (ccNumber == pThis->m_UI.m_nMIDIRhythm) {
                         pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventRhythm);
-                        goto skip_normal_cc;
+                        i += 2;
+                        continue;
                     }
-                    else if (ccNumber == pThis->m_UI.m_nMIDIUtility) {
+                    if (ccNumber == pThis->m_UI.m_nMIDIUtility) {
                         pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventUtility);
-                        goto skip_normal_cc;
+                        i += 2;
+                        continue;
                     }
-                    else if (ccNumber == pThis->m_UI.m_nMIDIMute) {
+                    if (ccNumber == pThis->m_UI.m_nMIDIMute) {
                         pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventMute);
-                        goto skip_normal_cc;
+                        i += 2;
+                        continue;
                     }
-                    else if (ccNumber == pThis->m_UI.m_nMIDIMonitor) {
+                    if (ccNumber == pThis->m_UI.m_nMIDIMonitor) {
                         pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventMonitor);
-                        goto skip_normal_cc;
+                        i += 2;
+                        continue;
                     }
-                    else if (ccNumber == pThis->m_UI.m_nMIDICompare) {
+                    if (ccNumber == pThis->m_UI.m_nMIDICompare) {
                         pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventCompare);
-                        goto skip_normal_cc;
+                        i += 2;
+                        continue;
                     }
-                    else if (ccNumber == pThis->m_UI.m_nMIDIEnter) {
+                    if (ccNumber == pThis->m_UI.m_nMIDIEnter) {
                         pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventEnter);
-                        goto skip_normal_cc;
+                        i += 2;
+                        continue;
                     }
                 }
             }
             
-            skip_normal_cc:;
             i += 2;
         }
     }

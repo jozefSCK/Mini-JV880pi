@@ -119,6 +119,7 @@ void CConfig::Load (void)
 	m_ButtonActionEnter = m_Properties.GetString("ButtonActionEnter", "click");
 
 	// MIDI buttons
+	m_nMIDIButtonCh = m_Properties.GetNumber ("MIDIButtonCh", 0);
 	m_nMIDIButtonPreview = m_Properties.GetNumber("MIDIButtonPreview", 0);
 	m_nMIDIButtonLeft = m_Properties.GetNumber("MIDIButtonLeft", 0);
 	m_nMIDIButtonRight = m_Properties.GetNumber("MIDIButtonRight", 0);
@@ -452,6 +453,11 @@ const char *CConfig::GetButtonActionCompare (void) const
 const char *CConfig::GetButtonActionEnter (void) const
 {
 	return m_ButtonActionEnter.c_str();
+}
+
+unsigned CConfig::GetMIDIButtonCh (void) const
+{
+	return m_nMIDIButtonCh;
 }
 
 unsigned CConfig::GetMIDIButtonPreview (void) const

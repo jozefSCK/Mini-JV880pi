@@ -42,7 +42,7 @@ public:
 	bool Initialize (void);
 
 	void Process (void);
-	void LCDInit(void);
+	bool LCDInit(void);
 	void LCDWrite (const char *pString);		// Print to optional HD44780 display
 	void TriggerUIButtonEvent(CUIButton::BtnEvent event);
 	
