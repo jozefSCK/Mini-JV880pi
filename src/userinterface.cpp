@@ -66,114 +66,25 @@ bool CUserInterface::Initialize (void)
 {
 	assert (m_pConfig);
 
-	if (m_pConfig->GetLCDEnabled ())
-	{
-		unsigned i2caddr = m_pConfig->GetLCDI2CAddress ();
-		unsigned ssd1306addr = m_pConfig->GetSSD1306LCDI2CAddress ();
-		bool st7789 = m_pConfig->GetST7789Enabled ();
-		if (ssd1306addr != 0) {
-			m_pSSD1306 = new CSSD1306Device (m_pConfig->GetSSD1306LCDWidth (), m_pConfig->GetSSD1306LCDHeight (),
-											 m_pI2CMaster, ssd1306addr,
-											 m_pConfig->GetSSD1306LCDRotate (), m_pConfig->GetSSD1306LCDMirror ());
-			if (!m_pSSD1306->Initialize ())
-			{
-				LOGDBG("LCD: SSD1306 initialization failed");
-				return false;
-			}
-			LOGDBG ("LCD: SSD1306");
-			m_pLCD = m_pSSD1306;
-		}
-		else if (st7789)
-		{
-			if (m_pSPIMaster == nullptr)
-			{
-				LOGDBG("LCD: ST7789 Enabled but SPI Initialisation Failed");
-				return false;
-			}
+	// Cache MIDI button configuration
+    m_nMIDIButtonChannel = 	m_pConfig->GetMIDIButtonCh();
+    m_nMIDIPreview = 		m_pConfig->GetMIDIButtonPreview() & 0x7F;
+    m_nMIDILeft = 			m_pConfig->GetMIDIButtonLeft() & 0x7F;
+    m_nMIDIRight = 			m_pConfig->GetMIDIButtonRight() & 0x7F;
+    m_nMIDIData = 			m_pConfig->GetMIDIButtonData() & 0x7F;
+    m_nMIDIToneSelect = 	m_pConfig->GetMIDIButtonToneSelect() & 0x7F;
+    m_nMIDIPatchPerform = 	m_pConfig->GetMIDIButtonPatchPerform() & 0x7F;
+    m_nMIDIEdit = 			m_pConfig->GetMIDIButtonEdit() & 0x7F;
+    m_nMIDISystem = 		m_pConfig->GetMIDIButtonSystem() & 0x7F;
+    m_nMIDIRhythm = 		m_pConfig->GetMIDIButtonRhythm() & 0x7F;
+    m_nMIDIUtility = 		m_pConfig->GetMIDIButtonUtility() & 0x7F;
+    m_nMIDIMute = 			m_pConfig->GetMIDIButtonMute() & 0x7F;
+    m_nMIDIMonitor = 		m_pConfig->GetMIDIButtonMonitor() & 0x7F;
+    m_nMIDICompare = 		m_pConfig->GetMIDIButtonCompare() & 0x7F;
+    m_nMIDIEnter = 			m_pConfig->GetMIDIButtonEnter() & 0x7F; 
 
-			unsigned long nSPIClock = 1000 * m_pConfig->GetSPIClockKHz();
-			unsigned nSPIMode = m_pConfig->GetSPIMode();
-			unsigned nCPHA = (nSPIMode & 1) ? 1 : 0;
-			unsigned nCPOL = (nSPIMode & 2) ? 1 : 0;
-			LOGDBG("SPI: CPOL=%u; CPHA=%u; CLK=%u",nCPOL,nCPHA,nSPIClock);
-			m_pST7789Display = new CST7789Display (m_pSPIMaster,
-							m_pConfig->GetST7789Data(),
-							m_pConfig->GetST7789Reset(),
-							m_pConfig->GetST7789Backlight(),
-							m_pConfig->GetST7789Width(),
-							m_pConfig->GetST7789Height(),
-							nCPOL, nCPHA, nSPIClock,
-							m_pConfig->GetST7789Select());
-			if (m_pST7789Display->Initialize())
-			{
-				m_pST7789Display->SetRotation (m_pConfig->GetST7789Rotation());
-				//bool bLargeFont = !(m_pConfig->GetST7789SmallFont());
-				m_pST7789 = new CST7789Device (m_pSPIMaster, m_pST7789Display, m_pConfig->GetLCDColumns (), m_pConfig->GetLCDRows (), Font8x16, false, false);
-				if (m_pST7789->Initialize())
-				{
-					LOGDBG ("LCD: ST7789");
-					m_pLCD = m_pST7789;
-				}
-				else
-				{
-					LOGDBG ("LCD: Failed to initalize ST7789 character device");
-					delete (m_pST7789);
-					delete (m_pST7789Display);
-					m_pST7789 = nullptr;
-					m_pST7789Display = nullptr;
-					return false;
-				}
-			}
-			else
-			{
-				LOGDBG ("LCD: Failed to initialize ST7789 display");
-				delete (m_pST7789Display);
-				m_pST7789Display = nullptr;
-				return false;
-			}
-		}
-		else if (i2caddr == 0)
-		{
-			m_pHD44780 = new CHD44780Device (m_pConfig->GetLCDColumns (), m_pConfig->GetLCDRows (),
-							 m_pConfig->GetLCDPinData4 (),
-							 m_pConfig->GetLCDPinData5 (),
-							 m_pConfig->GetLCDPinData6 (),
-							 m_pConfig->GetLCDPinData7 (),
-							 m_pConfig->GetLCDPinEnable (),
-							 m_pConfig->GetLCDPinRegisterSelect (),
-							 m_pConfig->GetLCDPinReadWrite ());
-			if (!m_pHD44780->Initialize ())
-			{
-				LOGDBG("LCD: HD44780 initialization failed");
-				return false;
-			}
-			LOGDBG ("LCD: HD44780");
-			m_pLCD = m_pHD44780;
-		}
-		else
-		{
-			m_pHD44780 = new CHD44780Device (m_pI2CMaster, i2caddr,
-							m_pConfig->GetLCDColumns (), m_pConfig->GetLCDRows ());
-			if (!m_pHD44780->Initialize ())
-			{
-				LOGDBG("LCD: HD44780 (I2C) initialization failed");
-				return false;
-			}
-			LOGDBG ("LCD: HD44780 I2C");
-			m_pLCD = m_pHD44780;
-		}
-		assert (m_pLCD);
-
-		m_pLCDBuffered = new CWriteBufferDevice (m_pLCD);
-		assert (m_pLCDBuffered);
-
-		LCDWrite ("\x1B[?25l\x1B""d+");		// cursor off, autopage mode
-		LCDWrite ("Start MiniJV880\n");
-		LCDWrite ("version %s"VERSION_SHORT);
-		m_pLCDBuffered->Update ();
-
-		LOGDBG ("LCD initialized");
-	}
+	
+	LCDInit();
 
 	m_pUIButtons = new CUIButtons (
                   m_pConfig->GetButtonPinPreview (), m_pConfig->GetButtonActionPreview (),
@@ -220,8 +131,7 @@ bool CUserInterface::Initialize (void)
 
 		LOGDBG ("Rotary encoder initialized");
 	}
-    // TODO: Update LCD
-
+   
 	return true;
 }
 
@@ -361,6 +271,119 @@ void CUserInterface::Process (void)
 		}
 	}
 	LCDWrite(Msg);*/
+}
+
+void CUserInterface::LCDInit()
+{
+if (m_pConfig->GetLCDEnabled ())
+	{
+		unsigned i2caddr = m_pConfig->GetLCDI2CAddress ();
+		unsigned ssd1306addr = m_pConfig->GetSSD1306LCDI2CAddress ();
+		bool st7789 = m_pConfig->GetST7789Enabled ();
+		if (ssd1306addr != 0) {
+			m_pSSD1306 = new CSSD1306Device (m_pConfig->GetSSD1306LCDWidth (), m_pConfig->GetSSD1306LCDHeight (),
+											 m_pI2CMaster, ssd1306addr,
+											 m_pConfig->GetSSD1306LCDRotate (), m_pConfig->GetSSD1306LCDMirror ());
+			if (!m_pSSD1306->Initialize ())
+			{
+				LOGDBG("LCD: SSD1306 initialization failed");
+				return false;
+			}
+			LOGDBG ("LCD: SSD1306");
+			m_pLCD = m_pSSD1306;
+		}
+		else if (st7789)
+		{
+			if (m_pSPIMaster == nullptr)
+			{
+				LOGDBG("LCD: ST7789 Enabled but SPI Initialisation Failed");
+				return false;
+			}
+
+			unsigned long nSPIClock = 1000 * m_pConfig->GetSPIClockKHz();
+			unsigned nSPIMode = m_pConfig->GetSPIMode();
+			unsigned nCPHA = (nSPIMode & 1) ? 1 : 0;
+			unsigned nCPOL = (nSPIMode & 2) ? 1 : 0;
+			LOGDBG("SPI: CPOL=%u; CPHA=%u; CLK=%u",nCPOL,nCPHA,nSPIClock);
+			m_pST7789Display = new CST7789Display (m_pSPIMaster,
+							m_pConfig->GetST7789Data(),
+							m_pConfig->GetST7789Reset(),
+							m_pConfig->GetST7789Backlight(),
+							m_pConfig->GetST7789Width(),
+							m_pConfig->GetST7789Height(),
+							nCPOL, nCPHA, nSPIClock,
+							m_pConfig->GetST7789Select());
+			if (m_pST7789Display->Initialize())
+			{
+				m_pST7789Display->SetRotation (m_pConfig->GetST7789Rotation());
+				//bool bLargeFont = !(m_pConfig->GetST7789SmallFont());
+				m_pST7789 = new CST7789Device (m_pSPIMaster, m_pST7789Display, m_pConfig->GetLCDColumns (), m_pConfig->GetLCDRows (), Font8x16, false, false);
+				if (m_pST7789->Initialize())
+				{
+					LOGDBG ("LCD: ST7789");
+					m_pLCD = m_pST7789;
+				}
+				else
+				{
+					LOGDBG ("LCD: Failed to initalize ST7789 character device");
+					delete (m_pST7789);
+					delete (m_pST7789Display);
+					m_pST7789 = nullptr;
+					m_pST7789Display = nullptr;
+					return false;
+				}
+			}
+			else
+			{
+				LOGDBG ("LCD: Failed to initialize ST7789 display");
+				delete (m_pST7789Display);
+				m_pST7789Display = nullptr;
+				return false;
+			}
+		}
+		else if (i2caddr == 0)
+		{
+			m_pHD44780 = new CHD44780Device (m_pConfig->GetLCDColumns (), m_pConfig->GetLCDRows (),
+							 m_pConfig->GetLCDPinData4 (),
+							 m_pConfig->GetLCDPinData5 (),
+							 m_pConfig->GetLCDPinData6 (),
+							 m_pConfig->GetLCDPinData7 (),
+							 m_pConfig->GetLCDPinEnable (),
+							 m_pConfig->GetLCDPinRegisterSelect (),
+							 m_pConfig->GetLCDPinReadWrite ());
+			if (!m_pHD44780->Initialize ())
+			{
+				LOGDBG("LCD: HD44780 initialization failed");
+				return false;
+			}
+			LOGDBG ("LCD: HD44780");
+			m_pLCD = m_pHD44780;
+		}
+		else
+		{
+			m_pHD44780 = new CHD44780Device (m_pI2CMaster, i2caddr,
+							m_pConfig->GetLCDColumns (), m_pConfig->GetLCDRows ());
+			if (!m_pHD44780->Initialize ())
+			{
+				LOGDBG("LCD: HD44780 (I2C) initialization failed");
+				return false;
+			}
+			LOGDBG ("LCD: HD44780 I2C");
+			m_pLCD = m_pHD44780;
+		}
+		assert (m_pLCD);
+
+		m_pLCDBuffered = new CWriteBufferDevice (m_pLCD);
+		assert (m_pLCDBuffered);
+
+		LCDWrite ("\x1B[?25l\x1B""d+");		// cursor off, autopage mode
+		LCDWrite ("Start MiniJV880\n");
+		LCDWrite ("version ");
+		LCDWrite (VERSION_SHORT);
+		m_pLCDBuffered->Update ();
+
+		LOGDBG ("LCD initialized");
+	}	
 }
 
 void CUserInterface::LCDWrite (const char *pString)
@@ -507,4 +530,31 @@ void CUserInterface::UIButtonsEventStub (CUIButton::BtnEvent Event, void *pParam
 	assert (pThis != 0);
 
 	pThis->UIButtonsEventHandler (Event);
+}
+
+void CUserInterface::TriggerUIButtonEvent(CUIButton::BtnEvent event)
+{
+    if (event != CUIButton::BtnEventNone)
+    {
+        UIButtonsEventHandler(event);
+    }
+}
+
+void CUserInterface::UpdateMIDIButtonConfig()
+{
+    m_nMIDIButtonCh = m_pConfig->GetMIDIButtonCh();
+    m_nPreviewCC = m_pConfig->GetMIDIButtonPreview() & 0x7F;
+    m_nLeftCC = m_pConfig->GetMIDIButtonLeft() & 0x7F;
+    m_nRightCC = m_pConfig->GetMIDIButtonRight() & 0x7F;
+    m_nDataCC = m_pConfig->GetMIDIButtonData() & 0x7F;
+    m_nToneSelectCC = m_pConfig->GetMIDIButtonToneSelect() & 0x7F;
+    m_nPatchPerformCC = m_pConfig->GetMIDIButtonPatchPerform() & 0x7F;
+    m_nEditCC = m_pConfig->GetMIDIButtonEdit() & 0x7F;
+    m_nSystemCC = m_pConfig->GetMIDIButtonSystem() & 0x7F;
+    m_nRhythmCC = m_pConfig->GetMIDIButtonRhythm() & 0x7F;
+    m_nUtilityCC = m_pConfig->GetMIDIButtonUtility() & 0x7F;
+    m_nMuteCC = m_pConfig->GetMIDIButtonMute() & 0x7F;
+    m_nMonitorCC = m_pConfig->GetMIDIButtonMonitor() & 0x7F;
+    m_nCompareCC = m_pConfig->GetMIDIButtonCompare() & 0x7F;
+    m_nEnterCC = m_pConfig->GetMIDIButtonEnter() & 0x7F;
 }
