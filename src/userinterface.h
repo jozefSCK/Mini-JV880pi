@@ -43,8 +43,25 @@ public:
 
 	void Process (void);
 	void LCDInit(void);
-
 	void LCDWrite (const char *pString);		// Print to optional HD44780 display
+	void TriggerUIButtonEvent(CUIButton::BtnEvent event);
+	
+	// MIDI button mappings - cached from config
+    unsigned m_nMIDIButtonChannel;
+    unsigned m_nMIDIPreview;
+    unsigned m_nMIDILeft;
+    unsigned m_nMIDIRight;
+    unsigned m_nMIDIData;
+    unsigned m_nMIDIToneSelect;
+    unsigned m_nMIDIPatchPerform;
+    unsigned m_nMIDIEdit;
+    unsigned m_nMIDISystem;
+    unsigned m_nMIDIRhythm;
+    unsigned m_nMIDIUtility;
+    unsigned m_nMIDIMute;
+    unsigned m_nMIDIMonitor;
+    unsigned m_nMIDICompare;
+    unsigned m_nMIDIEnter;
 
 private:
 
@@ -53,7 +70,6 @@ private:
 	void UIButtonsEventHandler (CUIButton::BtnEvent Event);
 	static void UIButtonsEventStub (CUIButton::BtnEvent Event, void *pParam);
 
-private:
 	CMiniJV880 *m_pMiniJV880;
 	CGPIOManager *m_pGPIOManager;
 	CI2CMaster *m_pI2CMaster;
@@ -71,26 +87,19 @@ private:
 
 	CKY040 *m_pRotaryEncoder;
 	bool m_bSwitchPressed;
-
 	u8 *screen_buffer;
 
 	unsigned m_lastTick;
-
 	int m_scrollPosition[2] = {0, 0};
-
 	unsigned long m_lastScrollTime = 0;
-
 	bool isPaused[2] = {true, true};  // Start paused
-
 	bool isAtEnd[2] = {false, false};
-
-  unsigned long pauseStartTime[2] = {0, 0};
-
+	unsigned long pauseStartTime[2] = {0, 0};
 	static const unsigned long SCROLL_INTERVAL = 500000;
-
 	static const unsigned long PAUSE_DURATION = 1000000;
-
 	static const int ACTUAL_COLS = 24;
+
+	
 };
 
 #endif

@@ -18,6 +18,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 #include "minijv880.h"
+#include "userinterface.h"
 #include <assert.h>
 #include <circle/devicenameservice.h>
 #include <circle/gpiopin.h>
@@ -31,12 +32,6 @@
 #include <string.h>
 #include <cstring>   // memcpy / memmove
 #include <algorithm>
-
-
-// конфиг: сколько циклов MCU считаем за один квант (подбирай)
-static constexpr uint64_t CYCLES_PER_INSTR = 12ull;   // твоё допущение
-static constexpr unsigned   INSTRS_PER_QUANTUM = 256u;
-static constexpr uint64_t   CYCLES_PER_QUANTUM = CYCLES_PER_INSTR * INSTRS_PER_QUANTUM;
 
 CMiniJV880 *CMiniJV880::s_pThis = 0;
 
@@ -219,29 +214,87 @@ void CMiniJV880::USBMIDIMessageHandler(unsigned nCable, u8 *pPacket,
 
 void CMiniJV880::ParseMIDIData(CMiniJV880* pThis, const u8* pData, unsigned nLength)
 {
-
     for (unsigned i = 0; i < nLength; i++)
     {
-
-        if ((pData[i] & 0xF0) == 0xB0 && i + 2 < nLength) 
+        u8 status = pData[i];
+        
+        if ((status & 0xF0) == 0xB0 && i + 2 < nLength) 
         {
             u8 ccNumber = pData[i + 1];
             u8 ccValue = pData[i + 2];
             
-            switch (ccNumber)
+            // Use cached MIDI button configuration
+            if (pThis->m_UI.m_nMIDIButtonChannel != 0) 
             {
-                case 0:   // Volume
-                    LOGDBG("Bank Select: %d", ccValue);
-                    break;
-                    
-                case 10:  // Pan
-                    LOGDBG("Pan CC: %d", ccValue);
-                    break;
-                    
+                bool channelMatch = (pThis->m_UI.m_nMIDIButtonChannel == 0xFF) || 
+                                  ((pThis->m_UI.m_nMIDIButtonChannel - 1) == (status & 0x0F));
+                
+                if (channelMatch && ccValue > 0) 
+                {
+                    // Direct access to cached values
+                    if (ccNumber == pThis->m_UI.m_nMIDIPreview) {
+                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventPreview);
+                        goto skip_normal_cc;
+                    }
+                    else if (ccNumber == pThis->m_UI.m_nMIDILeft) {
+                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventLeft);
+                        goto skip_normal_cc;
+                    }
+                    else if (ccNumber == pThis->m_UI.m_nMIDIRight) {
+                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventRight);
+                        goto skip_normal_cc;
+                    }
+                    else if (ccNumber == pThis->m_UI.m_nMIDIData) {
+                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventData);
+                        goto skip_normal_cc;
+                    }
+                    else if (ccNumber == pThis->m_UI.m_nMIDIToneSelect) {
+                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventToneSelect);
+                        goto skip_normal_cc;
+                    }
+                    else if (ccNumber == pThis->m_UI.m_nMIDIPatchPerform) {
+                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventPatchPerform);
+                        goto skip_normal_cc;
+                    }
+                    else if (ccNumber == pThis->m_UI.m_nMIDIEdit) {
+                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventEdit);
+                        goto skip_normal_cc;
+                    }
+                    else if (ccNumber == pThis->m_UI.m_nMIDISystem) {
+                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventSystem);
+                        goto skip_normal_cc;
+                    }
+                    else if (ccNumber == pThis->m_UI.m_nMIDIRhythm) {
+                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventRhythm);
+                        goto skip_normal_cc;
+                    }
+                    else if (ccNumber == pThis->m_UI.m_nMIDIUtility) {
+                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventUtility);
+                        goto skip_normal_cc;
+                    }
+                    else if (ccNumber == pThis->m_UI.m_nMIDIMute) {
+                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventMute);
+                        goto skip_normal_cc;
+                    }
+                    else if (ccNumber == pThis->m_UI.m_nMIDIMonitor) {
+                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventMonitor);
+                        goto skip_normal_cc;
+                    }
+                    else if (ccNumber == pThis->m_UI.m_nMIDICompare) {
+                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventCompare);
+                        goto skip_normal_cc;
+                    }
+                    else if (ccNumber == pThis->m_UI.m_nMIDIEnter) {
+                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventEnter);
+                        goto skip_normal_cc;
+                    }
+                }
             }
+            
+            skip_normal_cc:;
+            i += 2;
         }
     }
-    
     pThis->mcu.postMidiSC55(pData, nLength);
 }
 
