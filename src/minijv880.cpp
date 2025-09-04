@@ -217,99 +217,74 @@ void CMiniJV880::ParseMIDIData(CMiniJV880* pThis, const u8* pData, unsigned nLen
     for (unsigned i = 0; i < nLength; i++)
     {
         u8 status = pData[i];
-        
+
         if ((status & 0xF0) == 0xB0 && i + 2 < nLength) 
         {
             u8 ccNumber = pData[i + 1];
-            u8 ccValue = pData[i + 2];
-           
-           if (pThis->m_UI.m_nMIDIButtonChannel != 0 && ccValue > 0) 
+            u8 ccValue  = pData[i + 2];
+
+            if (pThis->m_UI.m_nMIDIButtonChannel != 0) 
             {
-                u8 channel = status & 0x0F;
+                u8 channel         = status & 0x0F;
                 u8 expectedChannel = pThis->m_UI.m_nMIDIButtonChannel - 1;
-                
-                // OMNI режим при m_nMIDIButtonChannel = 17, иначе проверка канала
+
+                // OMNI (17) или совпадение канала
                 if (pThis->m_UI.m_nMIDIButtonChannel == 17 || expectedChannel == channel) 
                 {
-                    // Быстрая проверка кнопок
-                    if (ccNumber == pThis->m_UI.m_nMIDIPreview) {
-                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventPreview);
+                    auto handleButton = [&](u8 confCC, CUIButton::BtnEvent ev) {
+                        if (ccNumber == confCC) {
+                            if (ccValue < 64) {
+                                // нажали
+                                pThis->m_UI.TriggerUIButtonEvent(ev);
+                                //LOGNOTE("Button on %d", confCC);
+                            } else {
+                                //LOGNOTE("Button off %d", confCC);
+                                pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventNone);
+                            }
+                            i += 2;
+                            return true;
+                        }
+                        return false;
+                    };
+
+                    if (handleButton(pThis->m_UI.m_nMIDIPreview,      CUIButton::BtnEventPreview)) continue;
+                    if (handleButton(pThis->m_UI.m_nMIDILeft,         CUIButton::BtnEventLeft)) continue;
+                    if (handleButton(pThis->m_UI.m_nMIDIRight,        CUIButton::BtnEventRight)) continue;
+                    if (handleButton(pThis->m_UI.m_nMIDIData,         CUIButton::BtnEventData)) continue;
+                    if (handleButton(pThis->m_UI.m_nMIDIToneSelect,   CUIButton::BtnEventToneSelect)) continue;
+                    if (handleButton(pThis->m_UI.m_nMIDIPatchPerform, CUIButton::BtnEventPatchPerform)) continue;
+                    if (handleButton(pThis->m_UI.m_nMIDIEdit,         CUIButton::BtnEventEdit)) continue;
+                    if (handleButton(pThis->m_UI.m_nMIDISystem,       CUIButton::BtnEventSystem)) continue;
+                    if (handleButton(pThis->m_UI.m_nMIDIRhythm,       CUIButton::BtnEventRhythm)) continue;
+                    if (handleButton(pThis->m_UI.m_nMIDIUtility,      CUIButton::BtnEventUtility)) continue;
+                    if (handleButton(pThis->m_UI.m_nMIDIMute,         CUIButton::BtnEventMute)) continue;
+                    if (handleButton(pThis->m_UI.m_nMIDIMonitor,      CUIButton::BtnEventMonitor)) continue;
+                    if (handleButton(pThis->m_UI.m_nMIDICompare,      CUIButton::BtnEventCompare)) continue;
+                    if (handleButton(pThis->m_UI.m_nMIDIEnter,        CUIButton::BtnEventEnter)) continue;
+
+                    // Энкодер
+                    if (ccNumber == pThis->m_UI.m_nMIDIUp && ccValue < 64) {
+                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventNone);
+                        pThis->mcu.MCU_EncoderTrigger(1);
                         i += 2;
                         continue;
                     }
-                    if (ccNumber == pThis->m_UI.m_nMIDILeft) {
-                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventLeft);
-                        i += 2;
-                        continue;
-                    }
-                    if (ccNumber == pThis->m_UI.m_nMIDIRight) {
-                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventRight);
-                        i += 2;
-                        continue;
-                    }
-                    if (ccNumber == pThis->m_UI.m_nMIDIData) {
-                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventData);
-                        i += 2;
-                        continue;
-                    }
-                    if (ccNumber == pThis->m_UI.m_nMIDIToneSelect) {
-                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventToneSelect);
-                        i += 2;
-                        continue;
-                    }
-                    if (ccNumber == pThis->m_UI.m_nMIDIPatchPerform) {
-                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventPatchPerform);
-                        i += 2;
-                        continue;
-                    }
-                    if (ccNumber == pThis->m_UI.m_nMIDIEdit) {
-                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventEdit);
-                        i += 2;
-                        continue;
-                    }
-                    if (ccNumber == pThis->m_UI.m_nMIDISystem) {
-                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventSystem);
-                        i += 2;
-                        continue;
-                    }
-                    if (ccNumber == pThis->m_UI.m_nMIDIRhythm) {
-                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventRhythm);
-                        i += 2;
-                        continue;
-                    }
-                    if (ccNumber == pThis->m_UI.m_nMIDIUtility) {
-                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventUtility);
-                        i += 2;
-                        continue;
-                    }
-                    if (ccNumber == pThis->m_UI.m_nMIDIMute) {
-                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventMute);
-                        i += 2;
-                        continue;
-                    }
-                    if (ccNumber == pThis->m_UI.m_nMIDIMonitor) {
-                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventMonitor);
-                        i += 2;
-                        continue;
-                    }
-                    if (ccNumber == pThis->m_UI.m_nMIDICompare) {
-                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventCompare);
-                        i += 2;
-                        continue;
-                    }
-                    if (ccNumber == pThis->m_UI.m_nMIDIEnter) {
-                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventEnter);
+                    if (ccNumber == pThis->m_UI.m_nMIDIDown && ccValue < 64) {
+                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventNone);
+                        pThis->mcu.MCU_EncoderTrigger(0);
                         i += 2;
                         continue;
                     }
                 }
             }
-            
+
             i += 2;
         }
     }
+
     pThis->mcu.postMidiSC55(pData, nLength);
 }
+
 
 void CMiniJV880::DeviceRemovedHandler(CDevice *pDevice, void *pContext) {
   LOGERR("CMiniJV880::DeviceRemovedHandler");
@@ -324,7 +299,7 @@ void CMiniJV880::DeviceRemovedHandler(CDevice *pDevice, void *pContext) {
 // double avg = 0;
 // int cnt = 0;
 
-
+/*
 void CMiniJV880::Run(unsigned nCore) {
   assert(1 <= nCore && nCore < CORES);
   int nSamples = 0;
@@ -392,6 +367,75 @@ void CMiniJV880::Run(unsigned nCore) {
       mcu.pcm.PCM_Update(mcu.mcu.cycles);
     }
   }
+}
+*/
+
+void CMiniJV880::Run(unsigned nCore) {
+    assert(1 <= nCore && nCore < CORES);
+    int nSamples = 0;
+    u8 buffer[64];
+
+    if (nCore == 1) { // 1st core - serial MIDI
+        while (true) {
+            int nRead = m_Serial.Read(buffer, sizeof(buffer));
+            if (nRead > 0)
+                ParseMIDIData(this, buffer, nRead);
+            CTimer::SimpleMsDelay(1);
+        }
+    } 
+    else if (nCore == 2) { // 2nd core - MCU code
+        unsigned log_counter = 0;
+        while (true) {
+            unsigned nFrames = m_nQueueSizeFrames - m_pSoundDevice->GetQueueFramesAvail();
+            if (nFrames >= m_nQueueSizeFrames / 2) {
+                nSamples = (int)nFrames * 2;
+                mcu.sample_write_ptr = 0;
+
+                while (mcu.sample_write_ptr < nSamples) {
+                    if (!mcu.mcu.ex_ignore)
+                        mcu.MCU_Interrupt_Handle();
+                    else
+                        mcu.mcu.ex_ignore = 0;
+
+                    if (!mcu.mcu.sleep)
+                        mcu.MCU_ReadInstruction();
+
+                    mcu.mcu.cycles += n_mMCUcycles;
+
+                    mcu.TIMER_Clock(mcu.mcu.cycles);
+                    mcu.MCU_UpdateUART_RX();
+                    mcu.MCU_UpdateUART_TX();
+                    mcu.MCU_UpdateAnalog(mcu.mcu.cycles);
+
+                    // Лог каждые 500 сэмплов
+                    if ((mcu.sample_write_ptr % 500) == 0 && log_counter++ % 10 == 0) {
+                        LOGNOTE("MCU cycles: %u | sample_write_ptr: %u | sleep: %d | ex_ignore: %d",
+                                mcu.mcu.cycles, mcu.sample_write_ptr,
+                                mcu.mcu.sleep, mcu.mcu.ex_ignore);
+                        CTimer::SimpleMsDelay(50); // пауза для чтения экрана
+                    }
+                }
+
+                int len = nSamples * sizeof(int16_t);
+                if (m_pSoundDevice->Write(mcu.sample_buffer, len) != len) {
+                    LOGERR("Sound data dropped");
+                }
+            }
+        }
+    } 
+    else if (nCore == 3) { // 3rd core - PCM Update
+    unsigned log_counter = 0;
+      while (true) {
+          mcu.pcm.PCM_Update(mcu.mcu.cycles);
+
+          // Лог каждые 1000 циклов
+          if ((mcu.mcu.cycles % 1000) == 0 && log_counter++ % 10 == 0) {
+              LOGNOTE("PCM Update running | MCU cycles: %u", mcu.mcu.cycles);
+              CTimer::SimpleMsDelay(50); // чтобы лог был медленный и читаемый
+          }
+      }
+    }
+
 }
 
 

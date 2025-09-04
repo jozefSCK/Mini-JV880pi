@@ -153,6 +153,8 @@ public:
     unsigned GetMIDIButtonMonitor (void) const;
     unsigned GetMIDIButtonCompare (void) const;
     unsigned GetMIDIButtonEnter (void) const;
+	unsigned GetMIDIButtonUp (void) const;
+	unsigned GetMIDIButtonDown (void) const;
 	
 	// Timeouts for button events in milliseconds
 	unsigned GetDoubleClickTimeout (void) const;
@@ -242,7 +244,7 @@ private:
 	std::string m_ButtonActionMonitor;
 	std::string m_ButtonActionCompare;
 	std::string m_ButtonActionEnter;
-
+	
 	unsigned m_nMIDIButtonCh;
 	unsigned m_nMIDIButtonPreview;
     unsigned m_nMIDIButtonLeft;
@@ -258,7 +260,8 @@ private:
     unsigned m_nMIDIButtonMonitor;
     unsigned m_nMIDIButtonCompare;
     unsigned m_nMIDIButtonEnter;
-	
+    unsigned m_nMIDIButtonUp;
+    unsigned m_nMIDIButtonDown;
 	unsigned m_nDoubleClickTimeout;
 	unsigned m_nLongPressTimeout;	
 

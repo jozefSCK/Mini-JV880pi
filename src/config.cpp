@@ -134,6 +134,8 @@ void CConfig::Load (void)
 	m_nMIDIButtonMonitor = m_Properties.GetNumber("MIDIButtonMonitor", 0);
 	m_nMIDIButtonCompare = m_Properties.GetNumber("MIDIButtonCompare", 0);
 	m_nMIDIButtonEnter = m_Properties.GetNumber("MIDIButtonEnter", 0);
+	m_nMIDIButtonUp = m_Properties.GetNumber("MIDIButtonUp", 0);
+	m_nMIDIButtonDown = m_Properties.GetNumber("MIDIButtonDown", 0);
 
 	m_nDoubleClickTimeout = m_Properties.GetNumber ("DoubleClickTimeout", 400);
 	m_nLongPressTimeout = m_Properties.GetNumber ("LongPressTimeout", 600);
@@ -528,6 +530,16 @@ unsigned CConfig::GetMIDIButtonCompare (void) const
 unsigned CConfig::GetMIDIButtonEnter (void) const
 {
     return m_nMIDIButtonEnter;
+}
+
+unsigned CConfig::GetMIDIButtonUp (void) const
+{
+    return m_nMIDIButtonUp;
+}
+
+unsigned CConfig::GetMIDIButtonDown (void) const
+{
+    return m_nMIDIButtonDown;
 }
 
 bool CConfig::GetEncoderEnabled (void) const

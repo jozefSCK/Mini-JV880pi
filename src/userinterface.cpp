@@ -82,6 +82,8 @@ bool CUserInterface::Initialize (void)
     m_nMIDIMonitor = 		m_pConfig->GetMIDIButtonMonitor() & 0x7F;
     m_nMIDICompare = 		m_pConfig->GetMIDIButtonCompare() & 0x7F;
     m_nMIDIEnter = 			m_pConfig->GetMIDIButtonEnter() & 0x7F; 
+	m_nMIDIUp = 			m_pConfig->GetMIDIButtonUp() & 0x7F; 
+	m_nMIDIDown = 			m_pConfig->GetMIDIButtonDown() & 0x7F; 
 
 	
 	if (!LCDInit()) {
@@ -296,63 +298,77 @@ LCDWrite(Msg);*/
 
 
 // SCROLL ROUTINE
-	int displayCols = m_pConfig->GetLCDColumns();
-	CString Msg ("\x1B[H\E[?25l");
-	for (int i = 0; i < 2; i++)
-	{
-		unsigned long currentTime = CTimer::GetClockTicks();
+    int displayCols = m_pConfig->GetLCDColumns();
+    CString Msg ("\x1B[H\E[?25l");
 
-		// Handle scrolling and pausing logic
-    if (currentTime - m_lastScrollTime >= SCROLL_INTERVAL) {
-			for (int r = 0; r < 2; r++) {
-				if (isPaused[r]) {
-					// Check if pause duration has elapsed
-					if (currentTime - pauseStartTime[r] >= PAUSE_DURATION) {
-						isPaused[r] = false;
-						if (isAtEnd[r]) {
-							// Reset to beginning after pause at end
-							m_scrollPosition[r] = 0;
-							isAtEnd[r] = false;
-							isPaused[r] = true;  // Pause again at start
-							pauseStartTime[r] = currentTime;
-						}
-					}
-				} else {
-					// Update scroll position
-					m_scrollPosition[r]++;
-					// Check if we've reached the end
-					if (m_scrollPosition[r] >= ACTUAL_COLS - displayCols) {
-						m_scrollPosition[r] = ACTUAL_COLS - displayCols;
-						isPaused[r] = true;
-						isAtEnd[r] = true;
-						pauseStartTime[r] = currentTime;
-					}
-				}
-			}
-			m_lastScrollTime = currentTime;
-		}
+    unsigned long currentTime = CTimer::GetClockTicks();
+
+    // Проверяем: нужно ли вообще скроллить
+    bool needScroll = false;
+    if (ACTUAL_COLS > displayCols) {
+        bool allSpaces = true;
+        for (int r = 0; r < 2; r++) {
+            for (int c = displayCols; c < ACTUAL_COLS; c++) {
+                if (m_pMiniJV880->mcu.lcd.LCD_Data[r * 40 + c] != ' ') {
+                    allSpaces = false;
+                    break;
+                }
+            }
+            if (!allSpaces) break;
+        }
+        needScroll = !allSpaces;
+    }
+
+    // Логика скролла
+    if (needScroll && (currentTime - m_lastScrollTime >= SCROLL_INTERVAL)) {
+        for (int r = 0; r < 2; r++) {
+            m_scrollPosition[r] += m_scrollDir[r];
+            if (m_scrollPosition[r] <= 0) {
+                m_scrollPosition[r] = 0;
+                m_scrollDir[r] = +1;
+            } else if (m_scrollPosition[r] >= ACTUAL_COLS - displayCols) {
+                m_scrollPosition[r] = ACTUAL_COLS - displayCols;
+                m_scrollDir[r] = -1;
+            }
+        }
+        m_lastScrollTime = currentTime;
+    }
+
+    // Отрисовка строк
+    for (int i = 0; i < 2; i++) {
+        int startPos = needScroll ? m_scrollPosition[i] : 0;
+
+        // курсор
+        int cursorRow = m_pMiniJV880->mcu.lcd.LCD_DD_RAM / 0x40;
+        int cursorCol = m_pMiniJV880->mcu.lcd.LCD_DD_RAM % 0x40;
+        bool cursorEnabled = m_pMiniJV880->mcu.lcd.LCD_C != 0;
+
+        for (int j = 0; j < displayCols; j++) {
+            int sourcePos = (j + startPos) % ACTUAL_COLS;
+            uint8_t ch = m_pMiniJV880->mcu.lcd.LCD_Data[i * 40 + sourcePos];
+
+            // проверяем попадание курсора в окно
+            bool cursorHere = false;
+            if (cursorEnabled && cursorRow == i) {
+                int rel = cursorCol - startPos;
+                if (rel < 0) rel += ACTUAL_COLS;
+                if (rel >= 0 && rel < displayCols && j == rel) {
+                    cursorHere = true;
+                }
+            }
+
+            if (cursorHere) {
+                Msg.Append("_");
+            } else {
+                char buf[2] = { (char)ch, 0 };
+                Msg.Append(buf);
+            }
+        }
+    }
+
+    LCDWrite(Msg);
 
 
-		// Calculate starting position for this row
-    int startPos = m_scrollPosition[i];
-		for (int j = 0; j < displayCols; j++)
-		{
-			int sourcePos = (j + startPos) % ACTUAL_COLS;
-			uint8_t ch = m_pMiniJV880->mcu.lcd.LCD_Data[i * 40 + sourcePos];
-			std::string str(1, ch);
-			const char *pString = str.c_str();
-
-			int jj = m_pMiniJV880->mcu.lcd.LCD_DD_RAM % 0x40;
-    	int ii = m_pMiniJV880->mcu.lcd.LCD_DD_RAM / 0x40;
-			if (i == ii && j == jj && ii < 2 && jj < ACTUAL_COLS && m_pMiniJV880->mcu.lcd.LCD_C) {
-				// cursor
-				Msg.Append("_");
-			} else {
-				Msg.Append(pString);
-			}
-		}
-	}
-	LCDWrite(Msg);
 }
 
 bool CUserInterface::LCDInit()
@@ -533,6 +549,9 @@ void CUserInterface::EncoderEventStub (CKY040::TEvent Event, void *pParam)
 void CUserInterface::UIButtonsEventHandler (CUIButton::BtnEvent Event)
 {
 	uint32_t btn = 0;
+	if (Event == CUIButton::BtnEventNone) {
+        btn = 0; 
+    }
 	if (Event == CUIButton::BtnEventPreview) {
 		btn |= 1 << MCU_BUTTON_PREVIEW;
 	} else {
@@ -603,7 +622,7 @@ void CUserInterface::UIButtonsEventHandler (CUIButton::BtnEvent Event)
 	} else {
 		btn &= ~(1 << MCU_BUTTON_ENTER);
 	}
-	LOGNOTE("Button: %x", btn);
+	//LOGNOTE("Button: %x", btn);
 	m_pMiniJV880->mcu.mcu_button_pressed = btn;
 }
 

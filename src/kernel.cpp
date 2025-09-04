@@ -115,7 +115,7 @@ CStdlibApp::TShutdownMode CKernel::Run (void)
 {
 	assert (m_pJV880);
 
-	uint16_t cnt = 0;
+	//uint16_t cnt = 0;
 
 	while (42 == 42)
 	{
@@ -127,9 +127,8 @@ CStdlibApp::TShutdownMode CKernel::Run (void)
 		{
 			mScreen.Update ();
 
-			cnt++;
-			if ((cnt & 1023) == 1023)
-				LOGNOTE("Temp: %d", m_CPUThrottle.GetTemperature ());
+			//cnt++;
+			//if ((cnt & 1023) == 1023) LOGNOTE("Temp: %d", m_CPUThrottle.GetTemperature ());
 		}
 
 		m_CPUThrottle.Update ();

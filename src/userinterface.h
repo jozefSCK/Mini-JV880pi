@@ -62,6 +62,8 @@ public:
     unsigned m_nMIDIMonitor;
     unsigned m_nMIDICompare;
     unsigned m_nMIDIEnter;
+	unsigned m_nMIDIUp;
+	unsigned m_nMIDIDown;
 
 private:
 
@@ -91,6 +93,7 @@ private:
 
 	unsigned m_lastTick;
 	int m_scrollPosition[2] = {0, 0};
+	int m_scrollDir[2] = {+1, +1}; 
 	unsigned long m_lastScrollTime = 0;
 	bool isPaused[2] = {true, true};  // Start paused
 	bool isAtEnd[2] = {false, false};
