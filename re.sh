@@ -28,4 +28,4 @@ ls *.img
 cd ..
 
 mkdir -p releases
-cp src/kernel8.img "releases/MiniJV880-${VERSION}.img"
+# cp src/kernel8.img "releases/MiniJV880-${VERSION}.img"

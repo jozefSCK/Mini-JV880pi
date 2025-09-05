@@ -392,6 +392,12 @@ void CMiniJV880::Run(unsigned nCore) {
                 mcu.sample_write_ptr = 0;
 
                 while (mcu.sample_write_ptr < nSamples) {
+                  // ===================================== Лог каждые 500 сэмплов
+                    if ((mcu.sample_write_ptr % 500) == 0 && log_counter++ % 10000 == 0) {
+                        LogMCU(mcu.mcu.cycles, mcu.sample_write_ptr, mcu.mcu.sleep, mcu.mcu.ex_ignore);
+                        //CTimer::SimpleMsDelay(50); // пауза для чтения экрана
+                    }
+                    // =========================================
                     if (!mcu.mcu.ex_ignore)
                         mcu.MCU_Interrupt_Handle();
                     else
@@ -407,13 +413,12 @@ void CMiniJV880::Run(unsigned nCore) {
                     mcu.MCU_UpdateUART_TX();
                     mcu.MCU_UpdateAnalog(mcu.mcu.cycles);
 
-                    // Лог каждые 500 сэмплов
-                    if ((mcu.sample_write_ptr % 500) == 0 && log_counter++ % 10 == 0) {
-                        LOGNOTE("MCU cycles: %u | sample_write_ptr: %u | sleep: %d | ex_ignore: %d",
-                                mcu.mcu.cycles, mcu.sample_write_ptr,
-                                mcu.mcu.sleep, mcu.mcu.ex_ignore);
-                        CTimer::SimpleMsDelay(50); // пауза для чтения экрана
+                    // ===================================== Лог каждые 500 сэмплов
+                    if ((mcu.sample_write_ptr % 500) == 0 && log_counter++ % 10000 == 0) {
+                        LogMCU(mcu.mcu.cycles, mcu.sample_write_ptr, mcu.mcu.sleep, mcu.mcu.ex_ignore);
+                        //CTimer::SimpleMsDelay(50); // пауза для чтения экрана
                     }
+                    // =========================================
                 }
 
                 int len = nSamples * sizeof(int16_t);
@@ -429,9 +434,9 @@ void CMiniJV880::Run(unsigned nCore) {
           mcu.pcm.PCM_Update(mcu.mcu.cycles);
 
           // Лог каждые 1000 циклов
-          if ((mcu.mcu.cycles % 1000) == 0 && log_counter++ % 10 == 0) {
-              LOGNOTE("PCM Update running | MCU cycles: %u", mcu.mcu.cycles);
-              CTimer::SimpleMsDelay(50); // чтобы лог был медленный и читаемый
+          if ((mcu.mcu.cycles % 1000) == 0 && log_counter++ % 10000 == 0) {
+              LogPCM(mcu.mcu.cycles);
+              //CTimer::SimpleMsDelay(50); // чтобы лог был медленный и читаемый
           }
       }
     }
@@ -595,3 +600,15 @@ void CMiniJV880::Run(unsigned nCore) {
         }
     }
 }*/
+
+void CMiniJV880::LogPCM(uint64_t logcyc1) {
+ LOGNOTE("PCM Update running | MCU cycles: %u", mcu.mcu.cycles);
+ return; 
+}
+
+void CMiniJV880::LogMCU(uint64_t logcyc,uint64_t  logwriteptr,int  logsleep,int  logex) {
+LOGNOTE("MCU cycles: %u | sample_write_ptr: %u | sleep: %d | ex_ignore: %d",
+                                mcu.mcu.cycles, mcu.sample_write_ptr,
+                                mcu.mcu.sleep, mcu.mcu.ex_ignore);
+ return;
+}
