@@ -303,7 +303,7 @@ LCDWrite(Msg);*/
 
     unsigned long currentTime = CTimer::GetClockTicks();
 
-    // Проверяем: нужно ли вообще скроллить
+    // Need Scroll?
     bool needScroll = false;
     if (ACTUAL_COLS > displayCols) {
         bool allSpaces = true;
@@ -319,7 +319,7 @@ LCDWrite(Msg);*/
         needScroll = !allSpaces;
     }
 
-    // Логика скролла
+    // Scroll logic
     if (needScroll && (currentTime - m_lastScrollTime >= SCROLL_INTERVAL)) {
         for (int r = 0; r < 2; r++) {
             m_scrollPosition[r] += m_scrollDir[r];
@@ -334,11 +334,11 @@ LCDWrite(Msg);*/
         m_lastScrollTime = currentTime;
     }
 
-    // Отрисовка строк
+    // Strings
     for (int i = 0; i < 2; i++) {
         int startPos = needScroll ? m_scrollPosition[i] : 0;
 
-        // курсор
+        // cursor
         int cursorRow = m_pMiniJV880->mcu.lcd.LCD_DD_RAM / 0x40;
         int cursorCol = m_pMiniJV880->mcu.lcd.LCD_DD_RAM % 0x40;
         bool cursorEnabled = m_pMiniJV880->mcu.lcd.LCD_C != 0;
@@ -347,7 +347,7 @@ LCDWrite(Msg);*/
             int sourcePos = (j + startPos) % ACTUAL_COLS;
             uint8_t ch = m_pMiniJV880->mcu.lcd.LCD_Data[i * 40 + sourcePos];
 
-            // проверяем попадание курсора в окно
+            // cursor in window?
             bool cursorHere = false;
             if (cursorEnabled && cursorRow == i) {
                 int rel = cursorCol - startPos;
