@@ -59,6 +59,9 @@ public:
                                     unsigned nLength);
   static void DeviceRemovedHandler(CDevice *pDevice, void *pContext);
   static void ParseMIDIData(CMiniJV880* pThis, const u8* pData, unsigned nLength);
+  void LogMCU(uint64_t logcyc,uint64_t  logwriteptr,int  logsleep,int  logex);
+  void LogPCM(uint64_t  logcyc1);
+  int s_log_counter = 0;
 
   MCU mcu;
 
@@ -84,7 +87,7 @@ private:
   unsigned m_lastTick1;
 
   static CMiniJV880 *s_pThis;
-  
+  unsigned n_mMCUcycles = 9;
   
 
 

@@ -54,6 +54,9 @@ public:
 
 	void Load (void);
 	
+	//MCU settings
+	unsigned GetMCUcycles (void) const;
+
 	// Sound device
 	const char *GetSoundDevice (void) const;
 	unsigned GetChunkSize (void) const;
@@ -133,6 +136,25 @@ public:
 	const char *GetButtonActionMonitor (void) const;
 	const char *GetButtonActionCompare (void) const;
 	const char *GetButtonActionEnter (void) const;
+
+	// MIDI buttons navigation
+	unsigned GetMIDIButtonCh   (void) const;
+	unsigned GetMIDIButtonPreview (void) const;
+    unsigned GetMIDIButtonLeft (void) const;
+    unsigned GetMIDIButtonRight (void) const;
+    unsigned GetMIDIButtonData (void) const;
+    unsigned GetMIDIButtonToneSelect (void) const;
+    unsigned GetMIDIButtonPatchPerform (void) const;
+    unsigned GetMIDIButtonEdit (void) const;
+    unsigned GetMIDIButtonSystem (void) const;
+    unsigned GetMIDIButtonRhythm (void) const;
+    unsigned GetMIDIButtonUtility (void) const;
+    unsigned GetMIDIButtonMute (void) const;
+    unsigned GetMIDIButtonMonitor (void) const;
+    unsigned GetMIDIButtonCompare (void) const;
+    unsigned GetMIDIButtonEnter (void) const;
+	unsigned GetMIDIButtonUp (void) const;
+	unsigned GetMIDIButtonDown (void) const;
 	
 	// Timeouts for button events in milliseconds
 	unsigned GetDoubleClickTimeout (void) const;
@@ -149,6 +171,8 @@ public:
 private:
 	CPropertiesFatFsFile m_Properties;
 	
+	unsigned m_nMCUcycles;
+
 	std::string m_SoundDevice;
 	unsigned m_nChunkSize;
 	unsigned m_nDACI2CAddress;
@@ -221,6 +245,23 @@ private:
 	std::string m_ButtonActionCompare;
 	std::string m_ButtonActionEnter;
 	
+	unsigned m_nMIDIButtonCh;
+	unsigned m_nMIDIButtonPreview;
+    unsigned m_nMIDIButtonLeft;
+    unsigned m_nMIDIButtonRight;
+    unsigned m_nMIDIButtonData;
+    unsigned m_nMIDIButtonToneSelect;
+    unsigned m_nMIDIButtonPatchPerform;
+    unsigned m_nMIDIButtonEdit;
+    unsigned m_nMIDIButtonSystem;
+    unsigned m_nMIDIButtonRhythm;
+    unsigned m_nMIDIButtonUtility;
+    unsigned m_nMIDIButtonMute;
+    unsigned m_nMIDIButtonMonitor;
+    unsigned m_nMIDIButtonCompare;
+    unsigned m_nMIDIButtonEnter;
+    unsigned m_nMIDIButtonUp;
+    unsigned m_nMIDIButtonDown;
 	unsigned m_nDoubleClickTimeout;
 	unsigned m_nLongPressTimeout;	
 

@@ -43,6 +43,12 @@
 
 LOGMODULE("mcu");
 
+// definitions
+int16_t sample_buffer[AUDIO_BUFFER_SIZE] = {0};
+uint64_t sample_write_idx = 0;
+uint64_t sample_read_idx  = 0;
+uint64_t sample_overflow_count = 0;
+
 void MCU::MCU_ErrorTrap() {
   LOGERR("trap %.2x %.4x\n", mcu.cp, mcu.pc);
 }
@@ -780,8 +786,8 @@ int MCU::startSC55(const uint8_t *s_rom1, const uint8_t *s_rom2,
 }
 
 void MCU::updateSC55(const int nSamples) {
-  sample_write_ptr = 0;
-  while (sample_write_ptr < nSamples) {
+  sample_write_idx = 0;
+  while (sample_write_idx < static_cast<uint32_t>(nSamples)) {
     if (!mcu.ex_ignore)
       MCU_Interrupt_Handle();
     else
@@ -826,7 +832,7 @@ void MCU::SC55_Reset() {
   pcm.PCM_Reset();
   TIMER_Reset();
 
-  sample_write_ptr = 0;
+  sample_write_idx = 0;
 }
 
 void MCU::postMidiSC55(const uint8_t *message, const int length) {

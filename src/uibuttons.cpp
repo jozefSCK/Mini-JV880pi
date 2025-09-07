@@ -352,6 +352,7 @@ boolean CUIButtons::Initialize (void)
 	return TRUE;
 }
 
+
 void CUIButtons::bindButton(unsigned pinNumber, CUIButton::BtnTrigger trigger, CUIButton::BtnEvent event)
 {
 	// First find the button
