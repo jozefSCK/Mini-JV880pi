@@ -54,6 +54,8 @@ CMiniJV880::CMiniJV880(CConfig *pConfig, CInterruptSystem *pInterrupt,
 
       s_pThis = this;
 
+      __atomic_store_n(&sample_write_idx, 0u, __ATOMIC_RELAXED);
+
   // select the sound device
   const char *pDeviceName = pConfig->GetSoundDevice();
   if (strcmp(pDeviceName, "i2s") == 0) {
@@ -372,7 +374,7 @@ void CMiniJV880::Run(unsigned nCore) {
 
 void CMiniJV880::Run(unsigned nCore) {
     assert(1 <= nCore && nCore < CORES);
-    int nSamples = 0;
+    //int nSamples = 0;
     u8 buffer[64];
 
     if (nCore == 1) { // 1st core - serial MIDI
@@ -383,21 +385,57 @@ void CMiniJV880::Run(unsigned nCore) {
             CTimer::SimpleMsDelay(1);
         }
     } 
-    else if (nCore == 2) { // 2nd core - MCU code
+    else if (nCore == 2) { // 2nd core - MCU + audio output
+        const int MCU_INSTR_BURST = 64;
         unsigned log_counter = 0;
+
         while (true) {
             unsigned nFrames = m_nQueueSizeFrames - m_pSoundDevice->GetQueueFramesAvail();
-            if (nFrames >= m_nQueueSizeFrames / 2) {
-                nSamples = (int)nFrames * 2;
-                mcu.sample_write_ptr = 0;
+            if (nFrames < m_nQueueSizeFrames / 2) {
+                CTimer::SimpleMsDelay(1);
+                continue;
+            }
 
-                while (mcu.sample_write_ptr < nSamples) {
-                  // ===================================== Лог каждые 500 сэмплов
-                    if ((mcu.sample_write_ptr % 500) == 0 && log_counter++ % 10000 == 0) {
-                        LogMCU(mcu.mcu.cycles, mcu.sample_write_ptr, mcu.mcu.sleep, mcu.mcu.ex_ignore);
-                        //CTimer::SimpleMsDelay(50); // пауза для чтения экрана
+            int nSamples = (int)nFrames * 2;
+            if (nSamples >= (int)AUDIO_BUFFER_SIZE) nSamples = (int)AUDIO_BUFFER_SIZE - 2;
+
+            // allocate contiguous output buffer
+            int16_t *out_buf = (int16_t*)malloc(nSamples * sizeof(int16_t));
+            if (!out_buf) { CTimer::SimpleMsDelay(1); continue; }
+
+            int out_pos = 0;
+
+            while (out_pos < nSamples) {
+                // 1) try to copy available audio first
+                uint64_t w = __atomic_load_n(&sample_write_idx, __ATOMIC_ACQUIRE);
+                uint64_t r = __atomic_load_n(&sample_read_idx,  __ATOMIC_RELAXED);
+                uint64_t avail = w - r;
+                if (avail > 0) {
+                    uint32_t need = (uint32_t)(nSamples - out_pos);
+                    uint32_t to_copy = (avail < need) ? (uint32_t)avail : need;
+
+                    uint32_t idx = (uint32_t)(r & AUDIO_BUFFER_MASK);
+                    uint32_t first = AUDIO_BUFFER_SIZE - idx;
+                    if (first > to_copy) first = to_copy;
+
+                    memcpy(&out_buf[out_pos], &sample_buffer[idx], first * sizeof(int16_t));
+                    out_pos += first;
+                    r += first;
+
+                    uint32_t rem = to_copy - first;
+                    if (rem) {
+                        memcpy(&out_buf[out_pos], &sample_buffer[r & AUDIO_BUFFER_MASK], rem * sizeof(int16_t));
+                        out_pos += rem;
+                        r += rem;
                     }
-                    // =========================================
+
+                    __atomic_store_n(&sample_read_idx, r, __ATOMIC_RELEASE);
+                    continue; // loop to fill remaining samples
+                }
+
+                // 2) if no samples ready, run bounded MCU burst to allow producer to progress
+                int instr = 0;
+                while (instr < MCU_INSTR_BURST) {
                     if (!mcu.mcu.ex_ignore)
                         mcu.MCU_Interrupt_Handle();
                     else
@@ -407,38 +445,60 @@ void CMiniJV880::Run(unsigned nCore) {
                         mcu.MCU_ReadInstruction();
 
                     mcu.mcu.cycles += n_mMCUcycles;
+                    __atomic_store_n(&mcu.mcu.cycles, mcu.mcu.cycles, __ATOMIC_RELEASE);
 
                     mcu.TIMER_Clock(mcu.mcu.cycles);
                     mcu.MCU_UpdateUART_RX();
                     mcu.MCU_UpdateUART_TX();
                     mcu.MCU_UpdateAnalog(mcu.mcu.cycles);
 
-                    // ===================================== Лог каждые 500 сэмплов
-                    if ((mcu.sample_write_ptr % 500) == 0 && log_counter++ % 10000 == 0) {
-                        LogMCU(mcu.mcu.cycles, mcu.sample_write_ptr, mcu.mcu.sleep, mcu.mcu.ex_ignore);
-                        //CTimer::SimpleMsDelay(50); // пауза для чтения экрана
-                    }
-                    // =========================================
+                    ++instr;
                 }
+                // then re-check available
+            } // out_pos loop
 
-                int len = nSamples * sizeof(int16_t);
-                if (m_pSoundDevice->Write(mcu.sample_buffer, len) != len) {
-                    LOGERR("Sound data dropped");
-                }
+            // write to audio device
+            int len = nSamples * sizeof(int16_t);
+            if (m_pSoundDevice->Write(out_buf, len) != len) {
+                LOGERR("Sound data dropped");
+            }
+            free(out_buf);
+        }
+    }
+
+    else if (nCore == 3) { // 3rd core - PCM Update
+        constexpr uint64_t MCU_CLOCK_HZ = 12000000ull; // if your MCU clock differs, set accordingly
+        constexpr uint32_t AUDIO_RATE = 32000u;
+        constexpr uint64_t CYCLES_PER_SAMPLE = MCU_CLOCK_HZ / AUDIO_RATE; // 375 typical for H8@12MHz
+        constexpr uint64_t CYCLES_PER_SAMPLE_FP = CYCLES_PER_SAMPLE << 32; // fixed-point
+        const uint32_t MAX_SAMPLES_PER_ITER = 128; // bound to avoid huge bursts
+
+        uint64_t last_generated_cycles = __atomic_load_n(&mcu.mcu.cycles, __ATOMIC_RELAXED);
+        uint64_t cycles_acc_fp = 0; // optional accumulator if needed by PCM internals
+
+        while (true) {
+            uint64_t cycles_target = __atomic_load_n(&mcu.mcu.cycles, __ATOMIC_ACQUIRE);
+            if (cycles_target <= last_generated_cycles) {
+                CTimer::SimpleMsDelay(0);
+                continue;
+            }
+
+            uint64_t cycles_avail = cycles_target - last_generated_cycles;
+            uint64_t samples_to_gen = cycles_avail / CYCLES_PER_SAMPLE;
+            while (samples_to_gen > 0) {
+                uint32_t gen = (uint32_t) (samples_to_gen > MAX_SAMPLES_PER_ITER ? MAX_SAMPLES_PER_ITER : samples_to_gen);
+                uint64_t pcm_target = last_generated_cycles + gen * CYCLES_PER_SAMPLE;
+
+                // PCM_Update must advance internal pcm.cycles up to pcm_target and call MCU_PostSample for samples
+                mcu.pcm.PCM_Update(pcm_target);
+
+                last_generated_cycles = pcm_target;
+                samples_to_gen -= gen;
+
+                // tiny yield to let consumer/core2 progress and reduce bursts
+                CTimer::SimpleMsDelay(0);
             }
         }
-    } 
-    else if (nCore == 3) { // 3rd core - PCM Update
-    unsigned log_counter = 0;
-      while (true) {
-          mcu.pcm.PCM_Update(mcu.mcu.cycles);
-
-          // Лог каждые 1000 циклов
-          if ((mcu.mcu.cycles % 1000) == 0 && log_counter++ % 10000 == 0) {
-              LogPCM(mcu.mcu.cycles);
-              //CTimer::SimpleMsDelay(50); // чтобы лог был медленный и читаемый
-          }
-      }
     }
 
 }
@@ -602,13 +662,15 @@ void CMiniJV880::Run(unsigned nCore) {
 }*/
 
 void CMiniJV880::LogPCM(uint64_t logcyc1) {
- LOGNOTE("PCM Update running | MCU cycles: %u", mcu.mcu.cycles);
+ return;
+  LOGNOTE("PCM Update running | MCU cycles: %u", mcu.mcu.cycles);
  return; 
 }
 
 void CMiniJV880::LogMCU(uint64_t logcyc,uint64_t  logwriteptr,int  logsleep,int  logex) {
-LOGNOTE("MCU cycles: %u | sample_write_ptr: %u | sleep: %d | ex_ignore: %d",
-                                mcu.mcu.cycles, mcu.sample_write_ptr,
+return;
+  LOGNOTE("MCU cycles: %u | sample_write_ptr: %u | sleep: %d | ex_ignore: %d",
+                                mcu.mcu.cycles, sample_write_idx,
                                 mcu.mcu.sleep, mcu.mcu.ex_ignore);
  return;
 }

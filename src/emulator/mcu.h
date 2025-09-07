@@ -40,6 +40,15 @@
 #include <stdint.h>
 #include <vector>
 
+constexpr uint32_t AUDIO_BUFFER_SIZE = 4096u; // power of two recommended
+constexpr uint32_t AUDIO_BUFFER_MASK = AUDIO_BUFFER_SIZE - 1u;
+
+// shared ring buffer declarations (definitions in mcu.cpp)
+extern int16_t sample_buffer[AUDIO_BUFFER_SIZE];
+extern uint64_t sample_write_idx; // monotonic sample count (samples)
+extern uint64_t sample_read_idx;  // monotonic sample count (samples)
+extern uint64_t sample_overflow_count; // diagnostic
+
 enum {
   DEV_P1DDR = 0x00,
   DEV_P5DDR = 0x08,
@@ -248,7 +257,9 @@ static const int CARDRAM_SIZE = 0x8000; // JV880 only
 static const int ROMSM_SIZE = 0x1000;
 const uint32_t uart_buffer_size = 8192;
 
-static const int audio_buffer_size = 4096;
+//static const int audio_buffer_size = 8192;
+//extern int16_t sample_buffer[audio_buffer_size];
+//extern int sample_write_ptr;
 
 struct MCU {
   uint32_t mcu_button_pressed;
@@ -324,8 +335,7 @@ struct MCU {
   Pcm pcm;
   LCD lcd;
 
-  int16_t sample_buffer[audio_buffer_size] = {0};
-  int sample_write_ptr = 0;
+
 
   MCU();
 
@@ -367,7 +377,7 @@ struct MCU {
   void TIMER2_Write(const uint32_t address, const uint8_t data);
   uint8_t TIMER_Read2(const uint32_t address);
 
-  inline void MCU_PostSample(int *sample) {
+  /*inline void MCU_PostSample(int *sample) {
     sample_buffer[sample_write_ptr++] = sample[0] >> 16;
     sample_buffer[sample_write_ptr++] = sample[1] >> 16;
     sample_write_ptr %= audio_buffer_size;
@@ -376,7 +386,37 @@ struct MCU {
     // sample_buffer[ptr] = sample[0] >> 16;
     // sample_buffer[ptr + 1] = sample[1] >> 16;
     // SDL_AtomicSet(&sample_write_ptr, (ptr + 2) % audio_buffer_size);
-  }
+  }*/
+
+// English comments only
+inline void MCU_PostSample(int *sample32) {
+    // write left/right 32->16 (with saturation) then publish new write index (release)
+    uint64_t cur = __atomic_load_n(&sample_write_idx, __ATOMIC_RELAXED);
+    uint32_t i0 = (uint32_t)(cur & AUDIO_BUFFER_MASK);
+    uint32_t i1 = (i0 + 1u) & AUDIO_BUFFER_MASK;
+
+    auto sat16 = [](int v)->int16_t {
+        if (v >  32767) return (int16_t)32767;
+        if (v < -32768) return (int16_t)-32768;
+        return (int16_t)v;
+    };
+
+    sample_buffer[i0] = sat16(sample32[0] >> 16);
+    sample_buffer[i1] = sat16(sample32[1] >> 16);
+
+    uint64_t next = cur + 2ull;
+
+    // protect against overflow: if next - read > buffer_size then advance read (drop oldest)
+    uint64_t r = __atomic_load_n(&sample_read_idx, __ATOMIC_ACQUIRE);
+    if ((next - r) > AUDIO_BUFFER_SIZE) {
+        uint64_t newr = next - AUDIO_BUFFER_SIZE;
+        __atomic_store_n(&sample_read_idx, newr, __ATOMIC_RELEASE);
+        __atomic_fetch_add(&sample_overflow_count, 1ull, __ATOMIC_RELAXED);
+    }
+
+    __atomic_store_n(&sample_write_idx, next, __ATOMIC_RELEASE);
+}
+
 
   inline uint32_t MCU_GetAddress(const uint8_t page, const uint16_t address) {
     return (page << 16) | address;
