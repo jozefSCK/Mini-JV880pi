@@ -91,6 +91,8 @@ private:
 	bool m_bSwitchPressed;
 	u8 *screen_buffer;
 
+	uint8_t m_lastLCDData[80] = {0}; //test
+
 	unsigned m_lastTick;
 	int m_scrollPosition[2] = {0, 0};
 	int m_scrollDir[2] = {+1, +1}; 

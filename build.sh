@@ -8,6 +8,11 @@ if [ -z "${RPI}" ] ; then
   exit 1
 fi
 
+if [ "${RPI}" -lt "3" ]; then
+  echo "Raspberry Pi ${RPI} is not supported (need >=3)"
+  exit 1
+fi
+
 if [ "${RPI}" -gt "2" ]; then
     export TOOLCHAIN_PREFIX="aarch64-none-elf-"
 else

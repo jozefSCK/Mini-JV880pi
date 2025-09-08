@@ -1,5 +1,14 @@
 #!/bin/bash
 
+    if [ -z "${RPI}" ] ; then
+    echo "\$RPI missing, exiting"
+    exit 1
+    fi
+
+    if [ "${RPI}" -lt "3" ]; then
+    echo "Raspberry Pi ${RPI} is not supported (need >=3)"
+    exit 1
+    fi
 
     if git describe --tags --dirty --always --long > /dev/null 2>&1; then
         VERSION=$(git describe --tags --dirty --always --long)

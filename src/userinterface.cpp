@@ -298,6 +298,72 @@ LCDWrite(Msg);*/
 
 
 // SCROLL ROUTINE
+int displayCols = m_pConfig->GetLCDColumns(); // 24
+CString Msg("\x1B[H\E[?25l"); // clear screen + hide cursor
+
+unsigned long currentTime = CTimer::GetClockTicks();
+
+// Compute actual length of each row
+int rowLen[2];
+for (int r = 0; r < 2; r++) {
+    rowLen[r] = 0;
+    for (int c = ACTUAL_COLS - 1; c >= 0; c--) {
+        if (m_pMiniJV880->mcu.lcd.LCD_Data[r * 40 + c] != ' ') {
+            rowLen[r] = c + 1;
+            break;
+        }
+    }
+}
+
+// Scroll logic
+for (int r = 0; r < 2; r++) {
+    if (rowLen[r] > displayCols) {
+        if (currentTime - m_lastScrollTime >= SCROLL_INTERVAL) {
+            m_scrollPosition[r] += m_scrollDir[r];
+            if (m_scrollPosition[r] <= 0) {
+                m_scrollPosition[r] = 0;
+                m_scrollDir[r] = +1;
+            } else if (m_scrollPosition[r] >= rowLen[r] - displayCols) {
+                m_scrollPosition[r] = rowLen[r] - displayCols;
+                m_scrollDir[r] = -1;
+            }
+        }
+    } else {
+        m_scrollPosition[r] = 0; // no scroll if text fits
+    }
+}
+if (currentTime - m_lastScrollTime >= SCROLL_INTERVAL) m_lastScrollTime = currentTime;
+
+// Render display
+for (int row = 0; row < 2; row++) {
+    int startPos = m_scrollPosition[row];
+    int cursorRow = m_pMiniJV880->mcu.lcd.LCD_DD_RAM / 0x40;
+    int cursorCol = m_pMiniJV880->mcu.lcd.LCD_DD_RAM % 0x40;
+    bool cursorEnabled = m_pMiniJV880->mcu.lcd.LCD_C != 0;
+
+    for (int col = 0; col < displayCols; col++) {
+        int sourcePos = col + startPos;
+        uint8_t ch = (sourcePos < ACTUAL_COLS) ? m_pMiniJV880->mcu.lcd.LCD_Data[row * 40 + sourcePos] : ' ';
+
+        // replace characters
+        if (ch == 0x09) ch = 0x7C; // vertical bar
+        else if (ch < 32 || ch > 126) ch = ' ';
+
+        // cursor as space
+        if (cursorEnabled && row == cursorRow && col == cursorCol - startPos && col >= 0 && col < displayCols) {
+            Msg.Append(" ");
+        } else {
+            char buf[2] = { (char)ch, 0 };
+            Msg.Append(buf);
+        }
+    }
+}
+
+LCDWrite(Msg);
+
+
+
+/*
     int displayCols = m_pConfig->GetLCDColumns();
     CString Msg ("\x1B[H\E[?25l");
 
@@ -367,7 +433,7 @@ LCDWrite(Msg);*/
     }
 
     LCDWrite(Msg);
-
+*/
 
 }
 
