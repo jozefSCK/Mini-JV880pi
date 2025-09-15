@@ -345,7 +345,7 @@ for (int row = 0; row < 2; row++) {
         int sourcePos = col + startPos;
         uint8_t ch = (sourcePos < ACTUAL_COLS) ? m_pMiniJV880->mcu.lcd.LCD_Data[row * 40 + sourcePos] : ' ';
 
-        // replace characters
+        // replace   characters
         if (ch == 0x09) ch = 0x7C; // vertical bar
         else if (ch < 32 || ch > 126) ch = ' ';
 
