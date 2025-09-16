@@ -118,9 +118,17 @@ bool CMiniJV880::Initialize(void) {
   uint8_t *nvram = (uint8_t *)malloc(NVRAM_SIZE);
   uint8_t *pcm1 = (uint8_t *)malloc(0x200000);
   uint8_t *pcm2 = (uint8_t *)malloc(0x200000);
+  uint8_t *exp1 = (uint8_t *)malloc(0x800000);
 
   FIL f;
   unsigned int nBytesRead = 0;
+
+  if (f_open(&f, "SR-JV80-11.bin", FA_READ | FA_OPEN_EXISTING) != FR_OK) {
+    LOGERR("Cannot open SR-JV80-11.bin");
+    return false;
+  }
+  f_read(&f, exp1, CARDRAM_SIZE, &nBytesRead);
+  f_close(&f);
 
   if (f_open(&f, "jv880_rom1.bin", FA_READ | FA_OPEN_EXISTING) != FR_OK) {
     LOGERR("Cannot open jv880_rom1.bin");
@@ -154,13 +162,14 @@ bool CMiniJV880::Initialize(void) {
   f_close(&f);
   LOGNOTE("Emu files loaded");
 
-  int ret = mcu.startSC55(rom1, rom2, pcm1, pcm2, nvram);
+  int ret = mcu.startSC55(rom1, rom2, pcm1, pcm2, nvram, exp1);
   LOGNOTE("startSC55 returned: %d", ret);
   free(rom1);
   free(rom2);
   free(nvram);
   free(pcm1);
   free(pcm2);
+  free(exp1);
 
   // setup and start the sound device
   int Channels = 2; // 16-bit Stereo

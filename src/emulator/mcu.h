@@ -272,6 +272,7 @@ struct MCU {
   uint8_t sram[SRAM_SIZE];
   uint8_t nvram[NVRAM_SIZE];
   uint8_t cardram[CARDRAM_SIZE];
+  uint8_t exp1[CARDRAM_SIZE];
 
   int rom2_mask = ROM2_SIZE - 1;
 
@@ -341,7 +342,7 @@ struct MCU {
 
   int startSC55(const uint8_t *s_rom1, const uint8_t *s_rom2,
                 const uint8_t *s_waverom1, const uint8_t *s_waverom2,
-                const uint8_t *s_nvram);
+                const uint8_t *s_nvram, const uint8_t *s_waverom_exp);
   void updateSC55(const int nSamples);
   void postMidiSC55(const uint8_t *message, int length);
   void SC55_Reset();
