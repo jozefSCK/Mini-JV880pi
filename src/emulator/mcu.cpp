@@ -777,8 +777,8 @@ int MCU::startSC55(const uint8_t *s_rom1, const uint8_t *s_rom2,
   unscramble(tempbuf, pcm.waverom1, 0x200000);
   memcpy(tempbuf, s_waverom2, 0x200000);
   unscramble(tempbuf, pcm.waverom2, 0x200000);
-  memcpy(tempbuf, s_waverom_exp, 0x800000);
-  unscramble(tempbuf, pcm.waverom_exp, 0x800000);
+  memcpy(tempbuf, s_waverom_exp, EXP_SIZE);
+  unscramble(tempbuf, pcm.waverom_exp, EXP_SIZE);
 
   free(tempbuf);
 

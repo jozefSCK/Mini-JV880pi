@@ -254,6 +254,7 @@ static const int RAM_SIZE = 0x400;
 static const int SRAM_SIZE = 0x8000;
 static const int NVRAM_SIZE = 0x8000;   // JV880 only
 static const int CARDRAM_SIZE = 0x8000; // JV880 only
+static const int EXP_SIZE = 0x800000;
 static const int ROMSM_SIZE = 0x1000;
 const uint32_t uart_buffer_size = 8192;
 
@@ -272,7 +273,7 @@ struct MCU {
   uint8_t sram[SRAM_SIZE];
   uint8_t nvram[NVRAM_SIZE];
   uint8_t cardram[CARDRAM_SIZE];
-  uint8_t exp1[CARDRAM_SIZE];
+  uint8_t exp1[EXP_SIZE];
 
   int rom2_mask = ROM2_SIZE - 1;
 

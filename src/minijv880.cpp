@@ -118,7 +118,7 @@ bool CMiniJV880::Initialize(void) {
   uint8_t *nvram = (uint8_t *)malloc(NVRAM_SIZE);
   uint8_t *pcm1 = (uint8_t *)malloc(0x200000);
   uint8_t *pcm2 = (uint8_t *)malloc(0x200000);
-  uint8_t *exp1 = (uint8_t *)malloc(0x800000);
+  uint8_t *exp1 = (uint8_t *)malloc(EXP_SIZE);
 
   FIL f;
   unsigned int nBytesRead = 0;
@@ -127,7 +127,7 @@ bool CMiniJV880::Initialize(void) {
     LOGERR("Cannot open SR-JV80-11.bin");
     return false;
   }
-  f_read(&f, exp1, CARDRAM_SIZE, &nBytesRead);
+  f_read(&f, exp1, EXP_SIZE, &nBytesRead);
   f_close(&f);
 
   if (f_open(&f, "jv880_rom1.bin", FA_READ | FA_OPEN_EXISTING) != FR_OK) {
