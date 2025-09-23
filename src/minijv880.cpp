@@ -20,6 +20,7 @@
 #include "minijv880.h"
 #include "userinterface.h"
 #include <assert.h>
+#include <circle/memory.h>
 #include <circle/devicenameservice.h>
 #include <circle/gpiopin.h>
 #include <circle/logger.h>
@@ -83,6 +84,7 @@ CMiniJV880::CMiniJV880(CConfig *pConfig, CInterruptSystem *pInterrupt,
     m_pSoundDevice =
         new CPWMSoundBaseDevice(pInterrupt, 32000, pConfig->GetChunkSize());
   }
+  
 };
 
 bool CMiniJV880::Initialize(void) {
@@ -99,7 +101,6 @@ bool CMiniJV880::Initialize(void) {
 		return false;
 	}
 
-
 	assert (m_pConfig);
 	if (!m_Serial.Initialize(m_pConfig->GetMIDIBaudRate ())) 
     {
@@ -112,14 +113,33 @@ bool CMiniJV880::Initialize(void) {
 	m_Serial.SetOptions(ser_options);
   LOGNOTE("Serial MIDI Initialized");
   
-  LOGNOTE("Loading emu files");
+ /* LOGNOTE("Loading emu files");
   uint8_t *rom1 = (uint8_t *)malloc(ROM1_SIZE);
   uint8_t *rom2 = (uint8_t *)malloc(ROM2_SIZE);
   uint8_t *nvram = (uint8_t *)malloc(NVRAM_SIZE);
   uint8_t *pcm1 = (uint8_t *)malloc(0x200000);
   uint8_t *pcm2 = (uint8_t *)malloc(0x200000);
   uint8_t *exp1 = (uint8_t *)malloc(EXP_SIZE);
+*/
 
+    if (!m_romLoader.loadEmuFiles()) {
+        LOGERR("Failed to load emulator files");
+        return false;
+    }
+
+    uint8_t* nvram = m_romLoader.getRomData(m_romLoader.getRomIndex("jv880_nvram.bin"));
+    uint8_t* rom1 = m_romLoader.getRomData(m_romLoader.getRomIndex("jv880_rom1.bin"));
+    uint8_t* rom2 = m_romLoader.getRomData(m_romLoader.getRomIndex("jv880_rom2.bin"));
+    uint8_t* pcm1 = m_romLoader.getRomData(m_romLoader.getRomIndex("jv880_waverom1.bin"));
+    uint8_t* pcm2 = m_romLoader.getRomData(m_romLoader.getRomIndex("jv880_waverom2.bin"));
+    uint8_t* exp1 = m_romLoader.getCurrentExpData();
+    
+    int ret = mcu.startSC55(rom1, rom2, pcm1, pcm2, nvram, exp1);
+    if (!ret) {
+        LOGNOTE("SC55 emulator started");
+    }
+
+/*
   FIL f;
   unsigned int nBytesRead = 0;
 
@@ -170,7 +190,8 @@ bool CMiniJV880::Initialize(void) {
   free(pcm1);
   free(pcm2);
   free(exp1);
-
+*/
+    
   // setup and start the sound device
   int Channels = 2; // 16-bit Stereo
   // Need 2 x ChunkSize / Channel queue frames as the audio driver uses

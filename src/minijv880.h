@@ -26,6 +26,7 @@
 
 #include "config.h"
 #include "userinterface.h"
+#include "rom.h"
 #include "emulator/mcu.h"
 #include <circle/gpiomanager.h>
 #include <circle/i2cmaster.h>
@@ -68,6 +69,7 @@ public:
 
 
 private:
+
   CConfig *m_pConfig;
   FATFS *m_pFileSystem;
 
@@ -82,6 +84,7 @@ private:
   unsigned m_nQueueSizeFrames;
 
   CUserInterface m_UI;
+  RomLoader m_romLoader;
 
   unsigned m_lastTick;
   unsigned m_lastTick1;

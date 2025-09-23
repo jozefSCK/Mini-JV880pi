@@ -765,7 +765,7 @@ MCU::MCU() : pcm(this), lcd(this) {}
 int MCU::startSC55(const uint8_t *s_rom1, const uint8_t *s_rom2,
                    const uint8_t *s_waverom1, const uint8_t *s_waverom2,
                    const uint8_t *s_nvram, const uint8_t *s_waverom_exp) {
-  uint8_t *tempbuf = (uint8_t *)malloc(0x800000);
+  //uint8_t *tempbuf = (uint8_t *)malloc(0x800000);
 
   memset(&mcu, 0, sizeof(mcu_t));
 
@@ -773,6 +773,11 @@ int MCU::startSC55(const uint8_t *s_rom1, const uint8_t *s_rom2,
   memcpy(rom2, s_rom2, ROM2_SIZE);
   memcpy(nvram, s_nvram, NVRAM_SIZE);
 
+  memcpy(pcm.waverom1, s_waverom1, 0x200000);
+  memcpy(pcm.waverom2, s_waverom2, 0x200000);
+  memcpy(pcm.waverom_exp, s_waverom_exp, EXP_SIZE);
+
+  /*
   memcpy(tempbuf, s_waverom1, 0x200000);
   unscramble(tempbuf, pcm.waverom1, 0x200000);
   memcpy(tempbuf, s_waverom2, 0x200000);
@@ -781,7 +786,7 @@ int MCU::startSC55(const uint8_t *s_rom1, const uint8_t *s_rom2,
   unscramble(tempbuf, pcm.waverom_exp, EXP_SIZE);
 
   free(tempbuf);
-
+*/
   SC55_Reset();
 
   return 0;
