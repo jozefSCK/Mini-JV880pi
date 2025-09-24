@@ -1,29 +1,10 @@
-//
-// rom.cpp
-//
-// Mini-JV880pi - synthesizer for bare metal Raspberry Pi
-// Copyright (C) 2025  Giulio Zausa/Gene J.B.
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this program.  If not, see <http://www.gnu.org/licenses/>.
-//
-
 // rom.cpp
 #include "rom.h"
 #include <circle/logger.h>
 #include <cstdlib>
 #include <cstring>
 #include <circle/memory.h>
+#include <cstdio>
 
 LOGMODULE("rom");
 
@@ -57,7 +38,7 @@ RomLoader::RomLoader() : m_totalPatchBanks(0), m_current_exp_data(nullptr) {
     m_romInfos[25] = {sz8M, "SR-JV80-19 House - CS 0x3E330C41.BIN", true, false, nullptr};
 
     // Initialize m_loadedRoms
-    for (int i = 0; i < romCount; i++) {
+    for (int i = 0; i < 26; i++) {
         m_loadedRoms[i] = nullptr;
     }
 }
@@ -66,35 +47,302 @@ RomLoader::~RomLoader() {
     cleanupRoms();
 }
 
-bool RomLoader::loadEmuFiles() {
-    LOGNOTE("Loading emu files");
+bool RomLoader::collectPatchData() {
+    // Check if datacollected file exists
+    FIL infoFile;
+    if (f_open(&infoFile, "datacollected", FA_READ | FA_OPEN_EXISTING) == FR_OK) {
+        f_close(&infoFile);
+        LOGNOTE("datacollected file exists, skipping patch data collection");
+        return true;
+    }
     
-    // Load all ROM files
-    if (!preloadAll()) {
-        LOGERR("Error loading ROM files");
+    LOGNOTE("Starting patch data collection");
+    
+    // Ensure patch directory exists
+    f_mkdir("patch");
+    
+    // Load required ROMs for patch extraction
+    uint8_t* rom2_data = nullptr;
+    uint8_t* rd500_patches_data = nullptr;
+    uint8_t* rd500_exp_data = nullptr;
+    
+    // Load jv880_rom2.bin
+    rom2_data = (uint8_t*)malloc(sz256K);
+    if (!rom2_data) {
+        LOGERR("Not enough memory for rom2");
+        return false;
+    }
+    if (!loadFile("jv880_rom2.bin", rom2_data, sz256K)) {
+        LOGERR("Cannot load jv880_rom2.bin");
+        free(rom2_data);
         return false;
     }
     
-    // Extract patches from all ROMs
-    if (!extractAllPatches()) {
-        LOGWARN("Error extracting patches (continuing operation)");
+    // Load rd500_patches.bin
+    rd500_patches_data = (uint8_t*)malloc(sz128K);
+    if (!rd500_patches_data) {
+        LOGERR("Not enough memory for rd500 patches");
+        free(rom2_data);
+        return false;
+    }
+    if (!loadFile("rd500_patches.bin", rd500_patches_data, sz128K)) {
+        LOGERR("Cannot load rd500_patches.bin");
+        free(rom2_data);
+        free(rd500_patches_data);
+        return false;
     }
     
-    // Display bank information
-    printPatchBankInfo();
+    // Load rd500_expansion.bin
+    rd500_exp_data = (uint8_t*)malloc(sz8M);
+    if (!rd500_exp_data) {
+        LOGERR("Not enough memory for rd500 expansion");
+        free(rom2_data);
+        free(rd500_patches_data);
+        return false;
+    }
+    if (!loadFile("rd500_expansion.bin", rd500_exp_data, sz8M)) {
+        LOGERR("Cannot load rd500_expansion.bin");
+        free(rom2_data);
+        free(rd500_patches_data);
+        free(rd500_exp_data);
+        return false;
+    }
     
-    LOGNOTE("All files loaded, created %d patch banks", m_totalPatchBanks);
+    FIL outFile;
+    unsigned int bytesWritten;
+    int bankNumber = 0;
+    char filename[64];
     
+    // Process system patches from rom2.bin (bank 0) - associated with waverom1.bin
+    sprintf(filename, "patch/bank%d.bin", bankNumber);
+    if (f_open(&outFile, filename, FA_WRITE | FA_CREATE_ALWAYS) == FR_OK) {
+        // Prepare output structure: waverom_info[64], patchdata[64*362], unscrambled[bool]
+        char waverom_info[64] = {0};
+        strcpy(waverom_info, "jv880_waverom1.bin");
+        
+        // Write waverom info (64 bytes)
+        f_write(&outFile, waverom_info, 64, &bytesWritten);
+        
+        // Write patch data (64 * 362 bytes)
+        uint8_t patchData[64 * 362];
+        memcpy(patchData, &rom2_data[0x008ce0], 64 * 362);
+        f_write(&outFile, patchData, 64 * 362, &bytesWritten);
+        
+        // Write unscrambled flag (1 byte)
+        uint8_t unscrambled = true; // waverom1 needs unscrambling
+        f_write(&outFile, &unscrambled, 1, &bytesWritten);
+        
+        f_close(&outFile);
+        LOGNOTE("Created system bank file: %s", filename);
+        bankNumber++;
+    }
+    
+    // Process RD500 patches (3 banks) - associated with rd500_expansion.bin
+    int rd500_offsets[3] = {0x0ce0, 0x8370, 0x12b82};
+    
+    for (int bank = 0; bank < 3; bank++) {
+        sprintf(filename, "patch/bank%d.bin", bankNumber);
+        
+        if (f_open(&outFile, filename, FA_WRITE | FA_CREATE_ALWAYS) == FR_OK) {
+            // Prepare output structure
+            char waverom_info[64] = {0};
+            strcpy(waverom_info, "rd500_expansion.bin");
+            
+            // Write waverom info (64 bytes)
+            f_write(&outFile, waverom_info, 64, &bytesWritten);
+            
+            // Write patch data (64 * 362 bytes)
+            uint32_t source_offset = rd500_offsets[bank];
+            uint8_t patchData[64 * 362];
+            memcpy(patchData, &rd500_patches_data[source_offset], 64 * 362);
+            f_write(&outFile, patchData, 64 * 362, &bytesWritten);
+            
+            // Write unscrambled flag (1 byte)
+            uint8_t unscrambled = true; // rd500_expansion needs unscrambling
+            f_write(&outFile, &unscrambled, 1, &bytesWritten);
+            
+            f_close(&outFile);
+            LOGNOTE("Created RD500 bank file: %s", filename);
+            bankNumber++;
+        }
+    }
+    
+    // Process all expansion ROMs from index 7 onwards
+    for (int i = 7; i < 26; i++) {
+        const char* exp_filename = m_romInfos[i].filename;
+        
+        // Load expansion ROM
+        uint8_t* exp_rom_data = (uint8_t*)malloc(sz8M);
+        if (!exp_rom_data) {
+            LOGERR("Not enough memory for expansion ROM %s", exp_filename);
+            continue;
+        }
+        
+        if (!loadFile(exp_filename, exp_rom_data, sz8M)) {
+            LOGERR("Cannot load expansion ROM %s", exp_filename);
+            free(exp_rom_data);
+            continue;
+        }
+        
+        // Descramble if needed
+        uint8_t* exp_rom_data_descrambled = (uint8_t*)malloc(sz8M);
+        if (!exp_rom_data_descrambled) {
+            LOGERR("Not enough memory for descrambled expansion ROM %s", exp_filename);
+            free(exp_rom_data);
+            continue;
+        }
+        
+        if (m_romInfos[i].needsUnscramble) {
+            unscrambleRom(exp_rom_data, exp_rom_data_descrambled, sz8M);
+        } else {
+            memcpy(exp_rom_data_descrambled, exp_rom_data, sz8M);
+        }
+        free(exp_rom_data);
+        
+        // Read patch count from offset 0x66-0x67
+        uint16_t patch_count = (exp_rom_data_descrambled[0x66] << 8) | exp_rom_data_descrambled[0x67];
+        LOGNOTE("Exp ROM %s contains %d patches", exp_filename, patch_count);
+        
+        // Skip if no patches
+        if (patch_count == 0) {
+            free(exp_rom_data_descrambled);
+            continue;
+        }
+        
+        // Read patch data offset from 0x8C-0x8F
+        uint32_t patch_data_offset = readBigEndian32(exp_rom_data_descrambled, 0x8C);
+        LOGNOTE("Patch data offset: 0x%08X", patch_data_offset);
+        
+        // Read bank name from offset 0x7FCC3A-0x7FCC45 (12 characters)
+        char bank_name[13];
+        memcpy(bank_name, &exp_rom_data_descrambled[0x7FCC3A], 12);
+        bank_name[12] = '\0';
+        LOGNOTE("Bank name: %s", bank_name);
+        
+        // Calculate number of banks (64 patches per bank)
+        int bank_count = (patch_count + 63) / 64; // Round up
+        LOGNOTE("Need %d banks for %d patches", bank_count, patch_count);
+        
+        for (int bank = 0; bank < bank_count; bank++) {
+            sprintf(filename, "patch/bank%d.bin", bankNumber);
+            
+            if (f_open(&outFile, filename, FA_WRITE | FA_CREATE_ALWAYS) == FR_OK) {
+                // Prepare output structure
+                char waverom_info[64] = {0};
+                strcpy(waverom_info, exp_filename);
+                
+                // Write waverom info (64 bytes)
+                f_write(&outFile, waverom_info, 64, &bytesWritten);
+                
+                // Write patch data (64 * 362 bytes)
+                uint32_t source_offset = patch_data_offset + (bank * 64 * 362);
+                int patches_in_bank = (bank == bank_count - 1) ? 
+                                     (patch_count - (bank * 64)) : 64;
+                
+                uint8_t patchData[64 * 362] = {0};
+                if (source_offset + (patches_in_bank * 362) <= sz8M) {
+                    memcpy(patchData, &exp_rom_data_descrambled[source_offset], patches_in_bank * 362);
+                }
+                f_write(&outFile, patchData, 64 * 362, &bytesWritten);
+                
+                // Write unscrambled flag (1 byte)
+                uint8_t unscrambled = m_romInfos[i].needsUnscramble;
+                f_write(&outFile, &unscrambled, 1, &bytesWritten);
+                
+                f_close(&outFile);
+                LOGNOTE("Created expansion bank file: %s, patches: %d", 
+                       filename, patches_in_bank);
+                bankNumber++;
+            }
+        }
+        
+        free(exp_rom_data_descrambled);
+    }
+    
+    // Create datacollected file to mark completion
+    if (f_open(&infoFile, "datacollected", FA_WRITE | FA_CREATE_ALWAYS) == FR_OK) {
+        uint8_t marker = 1;
+        f_write(&infoFile, &marker, 1, &bytesWritten);
+        f_close(&infoFile);
+        LOGNOTE("Created datacollected marker file");
+    }
+    
+    free(rom2_data);
+    free(rd500_patches_data);
+    free(rd500_exp_data);
+    
+    LOGNOTE("Patch data collection completed, created %d bank files", bankNumber);
+    return true;
+}
+
+bool RomLoader::loadMainRoms() {
+    LOGNOTE("Loading main ROMs for synthesizer");
+    
+    // Load 6 main files: nvram, rom1, rom2, waverom1, waverom2, and one expansion
+    const char* main_files[] = {
+        "jv880_nvram.bin", 
+        "jv880_rom1.bin", 
+        "jv880_rom2.bin", 
+        "jv880_waverom1.bin", 
+        "jv880_waverom2.bin",
+        "SR-JV80-01 Pop - CS 0x3F1CF705.bin"
+    };
+    
+    size_t sizes[] = {sz32K, sz32K, sz256K, sz2M, sz2M, sz8M};
+    
+    for (int i = 0; i < 6; i++) {
+        // Allocate memory
+        m_loadedRoms[i] = (uint8_t*)malloc(sizes[i]);
+        if (!m_loadedRoms[i]) {
+            LOGERR("Not enough memory for %s (size: %zu)", main_files[i], sizes[i]);
+            return false;
+        }
+        
+        // Load file
+        if (!loadFile(main_files[i], m_loadedRoms[i], sizes[i])) {
+            LOGERR("Cannot load %s", main_files[i]);
+            free(m_loadedRoms[i]);
+            m_loadedRoms[i] = nullptr;
+            return false;
+        }
+        
+        LOGNOTE("Loaded %s successfully", main_files[i]);
+        
+        // Find corresponding romInfo to check if descrambling is needed
+        bool needs_descramble = false;
+        for (int j = 0; j < 26; j++) {
+            if (strcmp(m_romInfos[j].filename, main_files[i]) == 0) {
+                needs_descramble = m_romInfos[j].needsUnscramble;
+                break;
+            }
+        }
+        
+        if (needs_descramble) {
+            uint8_t* descrambled_data = (uint8_t*)malloc(sizes[i]);
+            if (!descrambled_data) {
+                LOGERR("Not enough memory for descrambled %s", main_files[i]);
+                free(m_loadedRoms[i]);
+                m_loadedRoms[i] = nullptr;
+                return false;
+            }
+            LOGNOTE("Descrambling %s...", main_files[i]);
+            unscrambleRom(m_loadedRoms[i], descrambled_data, sizes[i]);
+            free(m_loadedRoms[i]);
+            m_loadedRoms[i] = descrambled_data;
+            LOGNOTE("Descrambled %s successfully", main_files[i]);
+        }
+    }
+    
+    LOGNOTE("All main ROMs loaded successfully");
     return true;
 }
 
 void RomLoader::cleanupRoms() {
     // Clean up loaded ROMs
-    for (int i = 0; i < romCount; i++) {
+    for (int i = 0; i < 26; i++) {
         if (m_loadedRoms[i]) {
             free(m_loadedRoms[i]);
             m_loadedRoms[i] = nullptr;
-            m_romInfos[i].loaded = false;
         }
     }
     
@@ -103,33 +351,11 @@ void RomLoader::cleanupRoms() {
         free(m_current_exp_data);
         m_current_exp_data = nullptr;
     }
-    
-    // Reset patch banks
-    m_totalPatchBanks = 0;
 }
 
 uint8_t* RomLoader::getRomData(int index) const {
-    if (index >= 0 && index < romCount) {
+    if (index >= 0 && index < 26) {
         return m_loadedRoms[index];
-    }
-    return nullptr;
-}
-
-int RomLoader::getRomIndex(const char* filename) const {
-    for (int i = 0; i < romCount; i++) {
-        if (strcmp(filename, m_romInfos[i].filename) == 0)
-            return i;
-    }
-    return -1;
-}
-
-int RomLoader::getTotalPatchBanks() const {
-    return m_totalPatchBanks;
-}
-
-const RomLoader::PatchBankInfo* RomLoader::getPatchBank(int index) const {
-    if (index >= 0 && index < m_totalPatchBanks) {
-        return &m_patchBanks[index];
     }
     return nullptr;
 }
@@ -138,304 +364,10 @@ uint8_t* RomLoader::getCurrentExpData() const {
     return m_current_exp_data;
 }
 
-bool RomLoader::preloadAll() {
-    for (int i = 0; i < romCount; i++) {
-        if (!loadRom(i, nullptr) && i < romCountRequired)
-            return false;
-    }
-    return true;
-}
-
-bool RomLoader::loadRom(int romI, uint8_t *dst) {
-    if (romI < romCount && m_loadedRoms[romI] != nullptr) {
-        if (dst != nullptr)
-            memcpy(dst, m_loadedRoms[romI], m_romInfos[romI].size);
-        m_romInfos[romI].loaded = true;
-        return true;
-    }
-
-    RomInfo *romInfo = &m_romInfos[romI];
-
-    // Allocate memory
-    uint8_t *data = (uint8_t *)malloc(romInfo->size);
-    if (!data) {
-        LOGERR("Not enough memory for %s", romInfo->filename);
-        return false;
-    }
-
-    // Load file
-    if (!loadFile(romInfo->filename, data, romInfo->size)) {
-        LOGERR("Error loading %s", romInfo->filename);
-        free(data);
-        return false;
-    }
-
-    // Descramble if needed
-    if (romInfo->needsUnscramble) {
-        uint8_t *dataOut = (uint8_t *)malloc(romInfo->size);
-        if (!dataOut) {
-            LOGERR("Not enough memory for descrambled %s", romInfo->filename);
-            free(data);
-            return false;
-        }
-        unscrambleRom(data, dataOut, romInfo->size);
-        free(data);
-        data = dataOut;
-    }
-
-    m_loadedRoms[romI] = (uint8_t *)malloc(romInfo->size);
-    memcpy(m_loadedRoms[romI], data, romInfo->size);
-    if (dst != nullptr)
-        memcpy(dst, data, romInfo->size);
-    free(data);
-    
-    m_romInfos[romI].loaded = true;
-    LOGNOTE("Loaded %s", romInfo->filename);
-    return true;
-}
-
 // Function to read 4-byte value from memory (big-endian)
 uint32_t RomLoader::readBigEndian32(const uint8_t* data, uint32_t offset) {
     return (data[offset] << 24) | (data[offset + 1] << 16) | 
            (data[offset + 2] << 8) | data[offset + 3];
-}
-
-// Function to extract patches from RD500 patches file
-bool RomLoader::extractPatchesFromRD500() {
-    int rd500_patches_index = getRomIndex("rd500_patches.bin");
-    if (rd500_patches_index == -1 || !m_loadedRoms[rd500_patches_index]) {
-        LOGERR("RD500 patches file not loaded");
-        return false;
-    }
-    
-    uint8_t* patch_data = m_loadedRoms[rd500_patches_index];
-    int nPatches = 192; // RD500 always has 192 patches
-    LOGNOTE("RD500 patches file contains %d patches", nPatches);
-    
-    // Create 3 banks for RD500 (64 patches each)
-    int rd500_offsets[3] = {0x0ce0, 0x8370, 0x12b82};
-    const char* rd500_bank_names[3] = {"RD500-Bank1", "RD500-Bank2", "RD500-Bank3"};
-    
-    for (int bank = 0; bank < 3 && m_totalPatchBanks < 200; bank++) {
-        PatchBankInfo* patchBank = &m_patchBanks[m_totalPatchBanks];
-        
-        patchBank->bankselect = m_totalPatchBanks + 1;
-        patchBank->expromindex = rd500_patches_index;
-        patchBank->patch_offset = rd500_offsets[bank];
-        patchBank->patch_count = 64;
-        
-        // Copy bank name
-        memcpy(patchBank->bankname, rd500_bank_names[bank], 12);
-        patchBank->bankname[12] = '\0';
-        
-        // Copy patch data
-        uint32_t source_offset = rd500_offsets[bank];
-        uint32_t copy_size = 64 * 362;
-        
-        if (source_offset + copy_size <= m_romInfos[rd500_patches_index].size) {
-            memcpy(patchBank->patches, &patch_data[source_offset], copy_size);
-            LOGNOTE("RD500 Bank %d: copied 64 patches from address 0x%08X", 
-                   bank + 1, source_offset);
-            m_totalPatchBanks++;
-        } else {
-            LOGERR("Error: out of bounds RD500 patch data");
-            return false;
-        }
-    }
-    
-    return true;
-}
-
-// Function to extract patches from one expansion ROM
-bool RomLoader::extractPatchesFromExpRom(int expRomIndex) {
-    // Special handling for RD500
-    if (expRomIndex == 6) { // rd500_expansion.bin
-        return true; // Handle separately
-    }
-    if (expRomIndex == 5) { // rd500_patches.bin
-        return extractPatchesFromRD500();
-    }
-    
-    if (expRomIndex < romCountRequired) return true; // Skip main ROMs
-    
-    if (!m_loadedRoms[expRomIndex]) {
-        LOGERR("Expansion ROM %d not loaded", expRomIndex);
-        return false;
-    }
-    
-    uint8_t* exp_data = m_loadedRoms[expRomIndex];
-    
-    // Read patch count from offset 0x66-0x67
-    uint16_t patch_count = (exp_data[0x66] << 8) | exp_data[0x67];
-    LOGNOTE("Exp ROM %s contains %d patches", 
-           m_romInfos[expRomIndex].filename, patch_count);
-    
-    // Read patch data offset from 0x8C-0x8F
-    uint32_t patch_data_offset = readBigEndian32(exp_data, 0x8C);
-    LOGNOTE("Patch data offset: 0x%08X", patch_data_offset);
-    
-    // Read bank name from offset 0x7FCC3A-0x7FCC45 (12 characters)
-    char bank_name[13];
-    memcpy(bank_name, &exp_data[0x7FCC3A], 12);
-    bank_name[12] = '\0';
-    LOGNOTE("Bank name: %s", bank_name);
-    
-    // Calculate number of banks (64 patches per bank)
-    int bank_count = (patch_count + 63) / 64; // Round up
-    LOGNOTE("Need %d banks for %d patches", bank_count, patch_count);
-    
-    // Create patch banks
-    for (int bank = 0; bank < bank_count && m_totalPatchBanks < 200; bank++) {
-        PatchBankInfo* patchBank = &m_patchBanks[m_totalPatchBanks];
-        
-        patchBank->bankselect = m_totalPatchBanks + 1; // Numbering from 1
-        patchBank->expromindex = expRomIndex;
-        patchBank->patch_offset = patch_data_offset + (bank * 64 * 362);
-        
-        // Determine number of patches in this bank
-        int remaining_patches = patch_count - (bank * 64);
-        patchBank->patch_count = (remaining_patches > 64) ? 64 : remaining_patches;
-        
-        // Copy bank name
-        memcpy(patchBank->bankname, bank_name, 12);
-        patchBank->bankname[12] = '\0';
-        
-        // Copy patch data
-        uint32_t source_offset = patch_data_offset + (bank * 64 * 362);
-        uint32_t copy_size = patchBank->patch_count * 362;
-        
-        // Check bounds
-        if (source_offset + copy_size <= m_romInfos[expRomIndex].size) {
-            memcpy(patchBank->patches, &exp_data[source_offset], copy_size);
-            LOGNOTE("Bank %d: copied %d patches from address 0x%08X", 
-                   patchBank->bankselect, patchBank->patch_count, source_offset);
-            m_totalPatchBanks++;
-        } else {
-            LOGERR("Error: out of bounds exp ROM data");
-            return false;
-        }
-    }
-    
-    return true;
-}
-
-// Function to extract system patches from rom2 (bank 0 only)
-bool RomLoader::extractSystemPatches() {
-    int rom2Index = getRomIndex("jv880_rom2.bin");
-    if (rom2Index == -1 || !m_loadedRoms[rom2Index]) {
-        LOGERR("ROM2 not loaded for system patches");
-        return false;
-    }
-    
-    uint8_t* rom2_data = m_loadedRoms[rom2Index];
-    
-    // Create bank 0 (patches 0-63 from offset 0x008ce0)
-    if (m_totalPatchBanks < 200) {
-        PatchBankInfo* bank0 = &m_patchBanks[m_totalPatchBanks];
-        bank0->bankselect = 0;  // Special bank 0
-        bank0->expromindex = rom2Index;
-        bank0->patch_offset = 0x008ce0;
-        bank0->patch_count = 64;
-        strcpy(bank0->bankname, "Internal");
-        
-        // Copy patch data
-        uint32_t source_offset = 0x008ce0;
-        uint32_t copy_size = 64 * 362;
-        
-        if (source_offset + copy_size <= m_romInfos[rom2Index].size) {
-            memcpy(bank0->patches, &rom2_data[source_offset], copy_size);
-            m_totalPatchBanks++;
-            LOGNOTE("Created system bank 0 with 64 patches");
-        } else {
-            LOGERR("Out of bounds system patch data for bank 0");
-            return false;
-        }
-    }
-    
-    return true;
-}
-
-// Function to extract patches from all expansion ROMs
-bool RomLoader::extractAllPatches() {
-    LOGNOTE("Extracting patches from all expansion ROMs");
-    
-    // Extract system patches first
-    if (!extractSystemPatches()) {
-        LOGWARN("Error extracting system patches (continuing)");
-    }
-    
-    // Extract patches from expansion ROMs
-    for (int i = romCountRequired; i < romCount; i++) {
-        LOGNOTE("Processing exp ROM %d: %s", i, m_romInfos[i].filename);
-        if (!extractPatchesFromExpRom(i)) {
-            LOGWARN("Failed to extract patches from %s", m_romInfos[i].filename);
-            // Continue with other ROMs
-        }
-    }
-    
-    LOGNOTE("Total %d patch banks created", m_totalPatchBanks);
-    return true;
-}
-
-// Function to display information about all banks
-void RomLoader::printPatchBankInfo() {
-    LOGNOTE("=== Patch Bank Information ===");
-    for (int i = 0; i < m_totalPatchBanks; i++) {
-        const PatchBankInfo* bank = &m_patchBanks[i];
-        LOGNOTE("Bank %d: ExpROM[%d] '%s', Name: '%s', %d patches, offset 0x%08X", 
-               bank->bankselect, 
-               bank->expromindex,
-               m_romInfos[bank->expromindex].filename,
-               bank->bankname,
-               bank->patch_count,
-               bank->patch_offset);
-    }
-}
-
-// Function to load patches to synthesizer memory by command
-bool RomLoader::loadPatchBankToSynth(int bankIndex) {
-    if (bankIndex < 0 || bankIndex >= m_totalPatchBanks) {
-        LOGERR("Invalid patch bank index: %d", bankIndex);
-        return false;
-    }
-    
-    const PatchBankInfo* bank = &m_patchBanks[bankIndex];
-    LOGNOTE("Loading bank %d (%s) to synthesizer memory", 
-           bank->bankselect, bank->bankname);
-    
-    // Load corresponding expansion ROM if not already loaded
-    // or if different one is loaded
-    if (bank->expromindex < romCountRequired) {
-        // System patch from main ROMs - already loaded
-        LOGNOTE("System patch bank, no expansion ROM needed");
-    } else {
-        // Load expansion ROM data to m_current_exp_data
-        if (m_current_exp_data) {
-            free(m_current_exp_data);
-            m_current_exp_data = nullptr;
-        }
-        
-        m_current_exp_data = (uint8_t*)malloc(m_romInfos[bank->expromindex].size);
-        if (!m_current_exp_data) {
-            LOGERR("Not enough memory for expansion ROM %s", 
-                  m_romInfos[bank->expromindex].filename);
-            return false;
-        }
-        
-        memcpy(m_current_exp_data, m_loadedRoms[bank->expromindex], m_romInfos[bank->expromindex].size);
-        LOGNOTE("Loaded expansion ROM %s for bank %d", 
-               m_romInfos[bank->expromindex].filename, bank->bankselect);
-    }
-    
-    // Here will be code for loading patches to synthesizer memory
-    // Just logging for now
-    LOGNOTE("Ready to load %d patches from bank %d (%s)", 
-           bank->patch_count, bank->bankselect, bank->bankname);
-    
-    // TODO: Add real loading to synthesizer memory
-    // This will be implemented later by command
-    
-    return true;
 }
 
 // Function to load file
@@ -471,4 +403,197 @@ void RomLoader::unscrambleRom(const uint8_t *src, uint8_t *dst, int len) {
         }
         dst[i] = data;
     }
+}
+
+// rom.cpp (дополнение к существующему файлу)
+
+bool RomLoader::switchPatchBank(int bankNumber) {
+    m_spinlock.Acquire();
+
+    char filename[64];
+    sprintf(filename, "patch/bank%d.bin", bankNumber);
+    
+    FIL file;
+    if (f_open(&file, filename, FA_READ | FA_OPEN_EXISTING) != FR_OK) {
+        // File doesn't exist, try bank 0
+        LOGWARN("Bank file %s not found, trying bank 0", filename);
+        
+        sprintf(filename, "patch/bank0.bin");
+        if (f_open(&file, filename, FA_READ | FA_OPEN_EXISTING) != FR_OK) {
+            // Bank 0 also doesn't exist, cold reload all ROMs
+            LOGERR("Bank 0 file not found, performing cold reload");
+            cleanupRoms();
+            if (!collectPatchData() || !loadMainRoms()) {
+                LOGERR("Cold reload failed");
+                m_spinlock.Release();
+                return false;
+            }
+            m_spinlock.Release();
+            return true;
+        }
+    }
+    
+    // Get file size
+    unsigned int fileSize = f_size(&file);
+    
+    if (fileSize < 64 + 1) { // Minimum size: 64 bytes for waverom_info + 1 byte for unscrambled flag
+        LOGERR("Bank file %s is too small (size: %d)", filename, fileSize);
+        f_close(&file);
+        m_spinlock.Release();
+        return false;
+    }
+    
+    // Read waverom_info (64 bytes)
+    char waverom_info[64];
+    unsigned int bytesRead;
+    f_read(&file, waverom_info, 64, &bytesRead);
+    if (bytesRead != 64) {
+        LOGERR("Failed to read waverom info from %s", filename);
+        f_close(&file);
+        m_spinlock.Release();
+        return false;
+    }
+    
+    // Load the waverom file specified in waverom_info
+    if (m_current_exp_data) {
+        free(m_current_exp_data);
+        m_current_exp_data = nullptr;
+    }
+    
+    // Find the corresponding ROM index for this waverom
+    int romIndex = -1;
+    for (int i = 0; i < 26; i++) {
+        if (strcmp(m_romInfos[i].filename, waverom_info) == 0) {
+            romIndex = i;
+            break;
+        }
+    }
+    
+    if (romIndex != -1 && m_loadedRoms[romIndex]) {
+        // Use already loaded ROM data
+        m_current_exp_data = (uint8_t*)malloc(m_romInfos[romIndex].size);
+        if (!m_current_exp_data) {
+            LOGERR("Not enough memory for expansion data");
+            f_close(&file);
+            m_spinlock.Release();
+            return false;
+        }
+        memcpy(m_current_exp_data, m_loadedRoms[romIndex], m_romInfos[romIndex].size);
+    } else {
+        // Load the waverom file
+        size_t size;
+        bool needsUnscramble = false;
+        
+        if (strcmp(waverom_info, "jv880_waverom1.bin") == 0) {
+            size = sz2M;
+            needsUnscramble = true;
+        } else if (strcmp(waverom_info, "jv880_waverom2.bin") == 0) {
+            size = sz2M;
+            needsUnscramble = true;
+        } else if (strcmp(waverom_info, "rd500_expansion.bin") == 0) {
+            size = sz8M;
+            needsUnscramble = true;
+        } else {
+            // Assume it's one of the expansion ROMs (8MB)
+            size = sz8M;
+            needsUnscramble = true;
+        }
+        
+        m_current_exp_data = (uint8_t*)malloc(size);
+        if (!m_current_exp_data) {
+            LOGERR("Not enough memory for expansion data");
+            f_close(&file);
+            m_spinlock.Release();
+            return false;
+        }
+        
+        if (!loadFile(waverom_info, m_current_exp_data, size)) {
+            LOGERR("Cannot load waverom file %s", waverom_info);
+            free(m_current_exp_data);
+            m_current_exp_data = nullptr;
+            f_close(&file);
+            m_spinlock.Release();
+            return false;
+        }
+        
+        if (needsUnscramble) {
+            uint8_t* descrambled_data = (uint8_t*)malloc(size);
+            if (!descrambled_data) {
+                LOGERR("Not enough memory for descrambled data");
+                free(m_current_exp_data);
+                m_current_exp_data = nullptr;
+                f_close(&file);
+                m_spinlock.Release();
+                return false;
+            }
+            unscrambleRom(m_current_exp_data, descrambled_data, size);
+            free(m_current_exp_data);
+            m_current_exp_data = descrambled_data;
+        }
+    }
+    
+    // Calculate how many patch data bytes to read
+    unsigned int patchDataSize = fileSize - 64 - 1; // Total size - waverom_info - unscrambled flag
+    if (patchDataSize % 362 != 0) {
+        LOGERR("Patch data size is not a multiple of 362 bytes");
+        f_close(&file);
+        m_spinlock.Release();
+        return false;
+    }
+    
+    // Seek to patch data (skip 64 bytes for waverom_info)
+    f_lseek(&file, 64);
+    
+    // Read patch data
+    uint8_t* patchData = (uint8_t*)malloc(64 * 362); // Always allocate space for 64 patches
+    if (!patchData) {
+        LOGERR("Not enough memory for patch data");
+        f_close(&file);
+        m_spinlock.Release();
+        return false;
+    }
+    
+    memset(patchData, 0, 64 * 362); // Initialize with zeros
+    
+    f_read(&file, patchData, patchDataSize, &bytesRead);
+    if (bytesRead != patchDataSize) {
+        LOGERR("Failed to read patch data from %s", filename);
+        free(patchData);
+        f_close(&file);
+        m_spinlock.Release();
+        return false;
+    }
+    
+    // Load patch data into nvram memory at offset 0x0d70 (for 64 patches)
+    if (m_loadedRoms[0]) { // nvram is at index 0
+        // Check if we're switching from drums to normal patches
+        if (m_loadedRoms[0][0x11] != 1) {
+            // Set flag to indicate normal patches
+            m_loadedRoms[0][0x11] = 1;
+            // Copy patch data (362 bytes per patch for 64 patches)
+            memcpy(&m_loadedRoms[0][0x0d70], patchData, 64 * 362);
+            // Reset the synthesizer
+            // mcu->SC55_Reset(); // This would need mcu access
+        } else {
+            // Already in normal patch mode, just update data
+            memcpy(&m_loadedRoms[0][0x0d70], patchData, 64 * 362);
+            // Send MIDI program change to update without reset
+            // uint8_t buffer[2] = {0xC0, 0x00};
+            // mcu->postMidiSC55(buffer, sizeof(buffer)); // This would need mcu access
+        }
+    }
+    
+    free(patchData);
+    
+    // Read unscrambled flag (1 byte) - seek to end and read
+    f_lseek(&file, fileSize - 1);
+    uint8_t unscrambled;
+    f_read(&file, &unscrambled, 1, &bytesRead);
+    
+    f_close(&file);
+    
+    LOGNOTE("Switched to bank %d, loaded waverom: %s", bankNumber, waverom_info);
+    
+    m_spinlock.Release();
+    return true;
 }

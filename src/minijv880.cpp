@@ -113,33 +113,34 @@ bool CMiniJV880::Initialize(void) {
 	m_Serial.SetOptions(ser_options);
   LOGNOTE("Serial MIDI Initialized");
   
- /* LOGNOTE("Loading emu files");
-  uint8_t *rom1 = (uint8_t *)malloc(ROM1_SIZE);
-  uint8_t *rom2 = (uint8_t *)malloc(ROM2_SIZE);
-  uint8_t *nvram = (uint8_t *)malloc(NVRAM_SIZE);
-  uint8_t *pcm1 = (uint8_t *)malloc(0x200000);
-  uint8_t *pcm2 = (uint8_t *)malloc(0x200000);
-  uint8_t *exp1 = (uint8_t *)malloc(EXP_SIZE);
-*/
-
-    if (!m_romLoader.loadEmuFiles()) {
-        LOGERR("Failed to load emulator files");
+    if (!m_romLoader.collectPatchData()) {
+    return false;
+    }
+    if (!m_romLoader.loadMainRoms()) {
         return false;
     }
+    m_romLoader.switchPatchBank(27);
 
-    uint8_t* nvram = m_romLoader.getRomData(m_romLoader.getRomIndex("jv880_nvram.bin"));
-    uint8_t* rom1 = m_romLoader.getRomData(m_romLoader.getRomIndex("jv880_rom1.bin"));
-    uint8_t* rom2 = m_romLoader.getRomData(m_romLoader.getRomIndex("jv880_rom2.bin"));
-    uint8_t* pcm1 = m_romLoader.getRomData(m_romLoader.getRomIndex("jv880_waverom1.bin"));
-    uint8_t* pcm2 = m_romLoader.getRomData(m_romLoader.getRomIndex("jv880_waverom2.bin"));
-    uint8_t* exp1 = m_romLoader.getCurrentExpData();
-    
+    uint8_t* nvram = m_romLoader.getRomData(0);  // jv880_nvram.bin
+    uint8_t* rom1 = m_romLoader.getRomData(1);   // jv880_rom1.bin
+    uint8_t* rom2 = m_romLoader.getRomData(2);   // jv880_rom2.bin
+    uint8_t* pcm1 = m_romLoader.getRomData(3);   // jv880_waverom1.bin
+    uint8_t* pcm2 = m_romLoader.getRomData(4);   // jv880_waverom2.bin
+    uint8_t* exp1 = m_romLoader.getRomData(5);   // SR-JV80-01 Pop - CS 0x3F1CF705.bin
+
     int ret = mcu.startSC55(rom1, rom2, pcm1, pcm2, nvram, exp1);
     if (!ret) {
         LOGNOTE("SC55 emulator started");
     }
 
 /*
+     LOGNOTE("Loading emu files");
+  uint8_t *rom1 = (uint8_t *)malloc(ROM1_SIZE);
+  uint8_t *rom2 = (uint8_t *)malloc(ROM2_SIZE);
+  uint8_t *nvram = (uint8_t *)malloc(NVRAM_SIZE);
+  uint8_t *pcm1 = (uint8_t *)malloc(0x200000);
+  uint8_t *pcm2 = (uint8_t *)malloc(0x200000);
+  uint8_t *exp1 = (uint8_t *)malloc(EXP_SIZE);
   FIL f;
   unsigned int nBytesRead = 0;
 
