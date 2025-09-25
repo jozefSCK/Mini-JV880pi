@@ -49,7 +49,13 @@ CMiniJV880::CMiniJV880(CConfig *pConfig, CInterruptSystem *pInterrupt,
       m_bChannelsSwapped(pConfig->GetChannelsSwapped()),
       m_UI(this, pGPIOManager, pI2CMaster, pSPIMaster, pConfig),
       m_lastTick(0),
-      m_lastTick1(0) {
+      m_lastTick1(0),
+      m_bNeedBankSwitch(false),
+      m_nTargetBank(0),
+      m_pTimer(nullptr),
+      m_nBankSwitchTimer(0) {
+
+        CTimer::Get();
   
       assert(m_pConfig);
 
@@ -119,7 +125,7 @@ bool CMiniJV880::Initialize(void) {
     if (!m_romLoader.loadMainRoms()) {
         return false;
     }
-    m_romLoader.switchPatchBank(27);
+    //m_romLoader.switchPatchBank(27);
 
     uint8_t* nvram = m_romLoader.getRomData(0);  // jv880_nvram.bin
     uint8_t* rom1 = m_romLoader.getRomData(1);   // jv880_rom1.bin
@@ -245,6 +251,38 @@ void CMiniJV880::USBMIDIMessageHandler(unsigned nCable, u8 *pPacket,
   //pThis->mcu.postMidiSC55(pPacket, nLength);
 }
 
+// Schedule bank switch with 2-second delay to handle multiple rapid changes
+void CMiniJV880::ScheduleBankSwitch(int bankNumber) {
+    m_nTargetBank = bankNumber;
+    m_bNeedBankSwitch = true;
+    
+    // Cancel previous timer if it was set
+    if (m_nBankSwitchTimer != 0) {
+        m_pTimer->CancelKernelTimer(m_nBankSwitchTimer);
+        m_nBankSwitchTimer = 0;
+    }
+    
+    // Set timer for 2 seconds to switch bank (to handle rapid encoder changes)
+    // Convert 2 seconds to ticks (2000ms * HZ / 1000 = 2 * HZ ticks)
+    unsigned nDelay = 2 * HZ; // 2 seconds in ticks (HZ = 100 ticks per second)
+    m_nBankSwitchTimer = m_pTimer->StartKernelTimer(nDelay, BankSwitchTimerHandler, this, nullptr);
+}
+
+// Timer handler to perform actual bank switch
+void CMiniJV880::BankSwitchTimerHandler(TKernelTimerHandle hTimer, void *pParam, void *pContext) {
+    CMiniJV880 *pThis = static_cast<CMiniJV880*>(pParam);
+    
+    if (pThis->m_bNeedBankSwitch) {
+        pThis->m_bNeedBankSwitch = false;
+        pThis->m_nBankSwitchTimer = 0; // Clear timer handle
+        
+        // Perform bank switch
+        pThis->m_romLoader.switchPatchBank(pThis->m_nTargetBank);
+
+        LOGNOTE("Bank switched to %d", pThis->m_nTargetBank);
+         pThis->mcu.SC55_Reset();
+    }
+}
 
 void CMiniJV880::ParseMIDIData(CMiniJV880* pThis, const u8* pData, unsigned nLength)
 {
@@ -256,6 +294,20 @@ void CMiniJV880::ParseMIDIData(CMiniJV880* pThis, const u8* pData, unsigned nLen
         {
             u8 ccNumber = pData[i + 1];
             u8 ccValue  = pData[i + 2];
+
+                        if (ccNumber == 0) { // Bank Select MSB
+                // Schedule bank switch based on MSB value
+                pThis->ScheduleBankSwitch(ccValue);
+                i += 2;
+                continue;
+            }
+            else if (ccNumber == 32) { // Bank Select LSB
+                // If you need to combine MSB and LSB, you'd need to track both
+                // For now, just use LSB as bank number
+                pThis->ScheduleBankSwitch(ccValue);
+                i += 2;
+                continue;
+            }
 
             if (pThis->m_UI.m_nMIDIButtonChannel != 0) 
             {
@@ -311,6 +363,13 @@ void CMiniJV880::ParseMIDIData(CMiniJV880* pThis, const u8* pData, unsigned nLen
             }
 
             i += 2;
+        }
+
+        // Also handle Program Change (0xC0) - single byte bank change
+        else if ((status & 0xF0) == 0xC0 && i + 1 < nLength) {
+            u8 programNumber = pData[i + 1];
+            pThis->ScheduleBankSwitch(programNumber);
+            i += 1; // Program Change has 1 data byte
         }
     }
 

@@ -19,6 +19,7 @@ public:
     // Accessor functions
     uint8_t* getRomData(int index) const;
     uint8_t* getCurrentExpData() const;
+    void setNvram(uint8_t* nvram);
 
 private:
     // ROM sizes
@@ -54,6 +55,7 @@ private:
     PatchBankInfo m_patchBanks[200];
     int m_totalPatchBanks;
     uint8_t* m_current_exp_data;
+    uint8_t* m_nvram;
 
     // Helper functions
     uint32_t readBigEndian32(const uint8_t* data, uint32_t offset);

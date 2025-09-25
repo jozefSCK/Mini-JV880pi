@@ -8,7 +8,11 @@
 
 LOGMODULE("rom");
 
-RomLoader::RomLoader() : m_totalPatchBanks(0), m_current_exp_data(nullptr) {
+RomLoader::RomLoader() : 
+    m_totalPatchBanks(0), 
+    m_current_exp_data(nullptr),
+    m_nvram(nullptr)
+     {
     // Initialize m_romInfos
     m_romInfos[0] = {sz32K, "jv880_nvram.bin", false, false, nullptr};
     m_romInfos[1] = {sz32K, "jv880_rom1.bin", false, false, nullptr};
@@ -116,21 +120,25 @@ bool RomLoader::collectPatchData() {
     // Process system patches from rom2.bin (bank 0) - associated with waverom1.bin
     sprintf(filename, "patch/bank%d.bin", bankNumber);
     if (f_open(&outFile, filename, FA_WRITE | FA_CREATE_ALWAYS) == FR_OK) {
-        // Prepare output structure: waverom_info[64], patchdata[64*362], unscrambled[bool]
+        // Prepare output structure: waverom_info[64], needdescramble[bool], patch_count[uint8_t], patchdata[x*362]
         char waverom_info[64] = {0};
         strcpy(waverom_info, "jv880_waverom1.bin");
         
         // Write waverom info (64 bytes)
         f_write(&outFile, waverom_info, 64, &bytesWritten);
         
+        // Write needdescramble flag (1 byte)
+        uint8_t need_descramble = true; // waverom1 needs unscrambling
+        f_write(&outFile, &need_descramble, 1, &bytesWritten);
+        
+        // Write patch count (1 byte) - always 64 for system patches
+        uint8_t patch_count = 64;
+        f_write(&outFile, &patch_count, 1, &bytesWritten);
+        
         // Write patch data (64 * 362 bytes)
         uint8_t patchData[64 * 362];
         memcpy(patchData, &rom2_data[0x008ce0], 64 * 362);
         f_write(&outFile, patchData, 64 * 362, &bytesWritten);
-        
-        // Write unscrambled flag (1 byte)
-        uint8_t unscrambled = true; // waverom1 needs unscrambling
-        f_write(&outFile, &unscrambled, 1, &bytesWritten);
         
         f_close(&outFile);
         LOGNOTE("Created system bank file: %s", filename);
@@ -151,15 +159,19 @@ bool RomLoader::collectPatchData() {
             // Write waverom info (64 bytes)
             f_write(&outFile, waverom_info, 64, &bytesWritten);
             
+            // Write needdescramble flag (1 byte)
+            uint8_t need_descramble = true; // rd500_expansion needs unscrambling
+            f_write(&outFile, &need_descramble, 1, &bytesWritten);
+            
+            // Write patch count (1 byte) - always 64 for RD500 banks
+            uint8_t patch_count = 64;
+            f_write(&outFile, &patch_count, 1, &bytesWritten);
+            
             // Write patch data (64 * 362 bytes)
             uint32_t source_offset = rd500_offsets[bank];
             uint8_t patchData[64 * 362];
             memcpy(patchData, &rd500_patches_data[source_offset], 64 * 362);
             f_write(&outFile, patchData, 64 * 362, &bytesWritten);
-            
-            // Write unscrambled flag (1 byte)
-            uint8_t unscrambled = true; // rd500_expansion needs unscrambling
-            f_write(&outFile, &unscrambled, 1, &bytesWritten);
             
             f_close(&outFile);
             LOGNOTE("Created RD500 bank file: %s", filename);
@@ -200,11 +212,11 @@ bool RomLoader::collectPatchData() {
         free(exp_rom_data);
         
         // Read patch count from offset 0x66-0x67
-        uint16_t patch_count = (exp_rom_data_descrambled[0x66] << 8) | exp_rom_data_descrambled[0x67];
-        LOGNOTE("Exp ROM %s contains %d patches", exp_filename, patch_count);
+        uint16_t patch_count_total = (exp_rom_data_descrambled[0x66] << 8) | exp_rom_data_descrambled[0x67];
+        LOGNOTE("Exp ROM %s contains %d patches", exp_filename, patch_count_total);
         
         // Skip if no patches
-        if (patch_count == 0) {
+        if (patch_count_total == 0) {
             free(exp_rom_data_descrambled);
             continue;
         }
@@ -220,34 +232,41 @@ bool RomLoader::collectPatchData() {
         LOGNOTE("Bank name: %s", bank_name);
         
         // Calculate number of banks (64 patches per bank)
-        int bank_count = (patch_count + 63) / 64; // Round up
-        LOGNOTE("Need %d banks for %d patches", bank_count, patch_count);
+        int bank_count = (patch_count_total + 63) / 64; // Round up
+        LOGNOTE("Need %d banks for %d patches", bank_count, patch_count_total);
         
         for (int bank = 0; bank < bank_count; bank++) {
             sprintf(filename, "patch/bank%d.bin", bankNumber);
             
             if (f_open(&outFile, filename, FA_WRITE | FA_CREATE_ALWAYS) == FR_OK) {
-                // Prepare output structure
+                // Prepare output structure: waverom_info[64], needdescramble[bool], patch_count[uint8_t], patchdata[x*362]
                 char waverom_info[64] = {0};
                 strcpy(waverom_info, exp_filename);
                 
                 // Write waverom info (64 bytes)
                 f_write(&outFile, waverom_info, 64, &bytesWritten);
                 
-                // Write patch data (64 * 362 bytes)
+                // Write needdescramble flag (1 byte)
+                uint8_t need_descramble = m_romInfos[i].needsUnscramble;
+                f_write(&outFile, &need_descramble, 1, &bytesWritten);
+                
+                // Calculate patches in this bank (could be less than 64 for the last bank)
+                uint8_t patches_in_bank = (bank == bank_count - 1) ? 
+                                         (uint8_t)(patch_count_total - (bank * 64)) : 64;
+                
+                // Write patch count (1 byte)
+                f_write(&outFile, &patches_in_bank, 1, &bytesWritten);
+                
+                // Write patch data (patches_in_bank * 362 bytes)
                 uint32_t source_offset = patch_data_offset + (bank * 64 * 362);
-                int patches_in_bank = (bank == bank_count - 1) ? 
-                                     (patch_count - (bank * 64)) : 64;
-                
-                uint8_t patchData[64 * 362] = {0};
-                if (source_offset + (patches_in_bank * 362) <= sz8M) {
-                    memcpy(patchData, &exp_rom_data_descrambled[source_offset], patches_in_bank * 362);
+                uint8_t* patchData = (uint8_t*)malloc(patches_in_bank * 362);
+                if (patchData) {
+                    if (source_offset + (patches_in_bank * 362) <= sz8M) {
+                        memcpy(patchData, &exp_rom_data_descrambled[source_offset], patches_in_bank * 362);
+                    }
+                    f_write(&outFile, patchData, patches_in_bank * 362, &bytesWritten);
+                    free(patchData);
                 }
-                f_write(&outFile, patchData, 64 * 362, &bytesWritten);
-                
-                // Write unscrambled flag (1 byte)
-                uint8_t unscrambled = m_romInfos[i].needsUnscramble;
-                f_write(&outFile, &unscrambled, 1, &bytesWritten);
                 
                 f_close(&outFile);
                 LOGNOTE("Created expansion bank file: %s, patches: %d", 
@@ -405,11 +424,11 @@ void RomLoader::unscrambleRom(const uint8_t *src, uint8_t *dst, int len) {
     }
 }
 
-// rom.cpp (дополнение к существующему файлу)
-
 bool RomLoader::switchPatchBank(int bankNumber) {
+    // Get the nvram pointer from outside (assuming it's passed as parameter or available)
+    // For now, let's assume we get it from the outside
+    uint8_t* nvram = m_nvram; // assuming we store nvram pointer in RomLoader class
     m_spinlock.Acquire();
-
     char filename[64];
     sprintf(filename, "patch/bank%d.bin", bankNumber);
     
@@ -427,6 +446,7 @@ bool RomLoader::switchPatchBank(int bankNumber) {
                 LOGERR("Cold reload failed");
                 m_spinlock.Release();
                 return false;
+
             }
             m_spinlock.Release();
             return true;
@@ -436,7 +456,7 @@ bool RomLoader::switchPatchBank(int bankNumber) {
     // Get file size
     unsigned int fileSize = f_size(&file);
     
-    if (fileSize < 64 + 1) { // Minimum size: 64 bytes for waverom_info + 1 byte for unscrambled flag
+    if (fileSize < 64 + 1 + 1) { // Minimum size: 64 bytes for waverom_info + 1 byte for needdescramble + 1 byte for patch_count
         LOGERR("Bank file %s is too small (size: %d)", filename, fileSize);
         f_close(&file);
         m_spinlock.Release();
@@ -453,6 +473,29 @@ bool RomLoader::switchPatchBank(int bankNumber) {
         m_spinlock.Release();
         return false;
     }
+    
+    // Read needdescramble flag (1 byte)
+    uint8_t need_descramble;
+    f_read(&file, &need_descramble, 1, &bytesRead);
+    if (bytesRead != 1) {
+        LOGERR("Failed to read descramble flag from %s", filename);
+        f_close(&file);
+        m_spinlock.Release();
+        return false;
+    }
+    
+    // Read patch count (1 byte)
+    uint8_t patch_count;
+    f_read(&file, &patch_count, 1, &bytesRead);
+    if (bytesRead != 1) {
+        LOGERR("Failed to read patch count from %s", filename);
+        f_close(&file);
+        m_spinlock.Release();
+        return false;
+    }
+    
+    LOGNOTE("Loading bank %d: waverom='%s', descramble=%d, patches=%d", 
+           bankNumber, waverom_info, need_descramble, patch_count);
     
     // Load the waverom file specified in waverom_info
     if (m_current_exp_data) {
@@ -482,21 +525,16 @@ bool RomLoader::switchPatchBank(int bankNumber) {
     } else {
         // Load the waverom file
         size_t size;
-        bool needsUnscramble = false;
         
         if (strcmp(waverom_info, "jv880_waverom1.bin") == 0) {
             size = sz2M;
-            needsUnscramble = true;
         } else if (strcmp(waverom_info, "jv880_waverom2.bin") == 0) {
             size = sz2M;
-            needsUnscramble = true;
         } else if (strcmp(waverom_info, "rd500_expansion.bin") == 0) {
             size = sz8M;
-            needsUnscramble = true;
         } else {
             // Assume it's one of the expansion ROMs (8MB)
             size = sz8M;
-            needsUnscramble = true;
         }
         
         m_current_exp_data = (uint8_t*)malloc(size);
@@ -516,7 +554,7 @@ bool RomLoader::switchPatchBank(int bankNumber) {
             return false;
         }
         
-        if (needsUnscramble) {
+        if (need_descramble) {
             uint8_t* descrambled_data = (uint8_t*)malloc(size);
             if (!descrambled_data) {
                 LOGERR("Not enough memory for descrambled data");
@@ -532,17 +570,16 @@ bool RomLoader::switchPatchBank(int bankNumber) {
         }
     }
     
-    // Calculate how many patch data bytes to read
-    unsigned int patchDataSize = fileSize - 64 - 1; // Total size - waverom_info - unscrambled flag
-    if (patchDataSize % 362 != 0) {
-        LOGERR("Patch data size is not a multiple of 362 bytes");
+    // Calculate expected patch data size
+    unsigned int expectedPatchDataSize = patch_count * 362;
+    unsigned int expectedFileSize = 64 + 1 + 1 + expectedPatchDataSize;
+    
+    if (fileSize != expectedFileSize) {
+        LOGERR("File size mismatch: expected %d, got %d", expectedFileSize, fileSize);
         f_close(&file);
         m_spinlock.Release();
         return false;
     }
-    
-    // Seek to patch data (skip 64 bytes for waverom_info)
-    f_lseek(&file, 64);
     
     // Read patch data
     uint8_t* patchData = (uint8_t*)malloc(64 * 362); // Always allocate space for 64 patches
@@ -555,8 +592,8 @@ bool RomLoader::switchPatchBank(int bankNumber) {
     
     memset(patchData, 0, 64 * 362); // Initialize with zeros
     
-    f_read(&file, patchData, patchDataSize, &bytesRead);
-    if (bytesRead != patchDataSize) {
+    f_read(&file, patchData, expectedPatchDataSize, &bytesRead);
+    if (bytesRead != expectedPatchDataSize) {
         LOGERR("Failed to read patch data from %s", filename);
         free(patchData);
         f_close(&file);
@@ -564,36 +601,62 @@ bool RomLoader::switchPatchBank(int bankNumber) {
         return false;
     }
     
-    // Load patch data into nvram memory at offset 0x0d70 (for 64 patches)
-    if (m_loadedRoms[0]) { // nvram is at index 0
-        // Check if we're switching from drums to normal patches
-        if (m_loadedRoms[0][0x11] != 1) {
-            // Set flag to indicate normal patches
-            m_loadedRoms[0][0x11] = 1;
-            // Copy patch data (362 bytes per patch for 64 patches)
-            memcpy(&m_loadedRoms[0][0x0d70], patchData, 64 * 362);
-            // Reset the synthesizer
-            // mcu->SC55_Reset(); // This would need mcu access
-        } else {
-            // Already in normal patch mode, just update data
-            memcpy(&m_loadedRoms[0][0x0d70], patchData, 64 * 362);
-            // Send MIDI program change to update without reset
-            // uint8_t buffer[2] = {0xC0, 0x00};
-            // mcu->postMidiSC55(buffer, sizeof(buffer)); // This would need mcu access
+    // Load patch data into nvram memory at offset 0x0d70
+    if (nvram) { // Use the nvram pointer passed from outside
+        
+        // If patch_count < 64, first load patches from bank 0 to fill remaining slots
+        if (patch_count < 64) {
+            // Try to load bank 0 to fill remaining patch slots
+            char bank0_filename[64];
+            sprintf(bank0_filename, "patch/bank0.bin");
+            
+            FIL bank0_file;
+            if (f_open(&bank0_file, bank0_filename, FA_READ | FA_OPEN_EXISTING) == FR_OK) {
+                // Skip 64 bytes waverom_info + 1 byte needdescramble + 1 byte patch_count
+                f_lseek(&bank0_file, 64 + 1 + 1);
+                
+                // Read bank 0 patch data (for remaining patches)
+                uint8_t* bank0_patchData = (uint8_t*)malloc(64 * 362);
+                if (bank0_patchData) {
+                    unsigned int bank0_patch_count;
+                    f_lseek(&bank0_file, 64 + 1); // Go to patch count position
+                    f_read(&bank0_file, &bank0_patch_count, 1, &bytesRead);
+                    
+                    if (bank0_patch_count == 64) { // Only use bank 0 if it has 64 patches
+                        f_lseek(&bank0_file, 64 + 1 + 1); // Go back to patch data position
+                        f_read(&bank0_file, bank0_patchData, 64 * 362, &bytesRead);
+                        
+                        // Copy bank 0 patches to slots after the current bank patches
+                        memcpy(&nvram[0x0d70 + patch_count * 362], 
+                               bank0_patchData, 
+                               (64 - patch_count) * 362);
+                    }
+                    free(bank0_patchData);
+                }
+                f_close(&bank0_file);
+            }
         }
+        
+        // Copy current bank patches to the beginning
+        memcpy(&nvram[0x0d70], patchData, patch_count * 362);
+        
+        // Check if we're switching from drums to normal patches
+        if (nvram[0x11] != 1) {
+            // Set flag to indicate normal patches
+            nvram[0x11] = 1;
+        } 
     }
     
     free(patchData);
     
-    // Read unscrambled flag (1 byte) - seek to end and read
-    f_lseek(&file, fileSize - 1);
-    uint8_t unscrambled;
-    f_read(&file, &unscrambled, 1, &bytesRead);
-    
     f_close(&file);
     
     LOGNOTE("Switched to bank %d, loaded waverom: %s", bankNumber, waverom_info);
-    
     m_spinlock.Release();
     return true;
 }
+
+void RomLoader::setNvram(uint8_t* nvram) 
+    { 
+        m_nvram = nvram; 
+    }
