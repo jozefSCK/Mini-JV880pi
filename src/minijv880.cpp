@@ -17,7 +17,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
-#include "minijv880.h"
+#include "minijv880.h" //#include "roms.h"
 #include "userinterface.h"
 #include <assert.h>
 #include <circle/memory.h>
@@ -34,9 +34,39 @@
 #include <cstring>   // memcpy / memmove
 #include <algorithm>
 
+LOGMODULE("minijv880");
+
 CMiniJV880 *CMiniJV880::s_pThis = 0;
 
-LOGMODULE("minijv880");
+CMiniJV880::RomInfo CMiniJV880::m_romInfos[26] = {
+    m_romInfos[0] = {sz32K, "jv880_nvram.bin", false, false, false, nullptr},
+    m_romInfos[1] = {sz32K, "jv880_rom1.bin", false, false, false, nullptr},
+    m_romInfos[2] = {sz256K, "jv880_rom2.bin", false, false, false, nullptr},
+    m_romInfos[3] = {sz2M, "jv880_waverom1.bin", true, false, true, nullptr},
+    m_romInfos[4] = {sz2M, "jv880_waverom2.bin", true, false, true, nullptr},
+    m_romInfos[5] = {sz128K, "rd500_patches.bin", false, false, false, nullptr},
+    m_romInfos[6] = {sz8M, "rd500_expansion.bin", true, false, true, nullptr},
+    m_romInfos[7] = {sz8M, "SR-JV80-01 Pop - CS 0x3F1CF705.bin", true, false, true, nullptr},
+    m_romInfos[8] = {sz8M, "SR-JV80-02 Orchestral - CS 0x3F0E09E2.BIN", true, false, true, nullptr},
+    m_romInfos[9] = {sz8M, "SR-JV80-03 Piano - CS 0x3F8DB303.bin", true, false, true, nullptr},
+    m_romInfos[10] = {sz8M, "SR-JV80-04 Vintage Synth - CS 0x3E23B90C.BIN", true, false, true, nullptr},
+    m_romInfos[11] = {sz8M, "SR-JV80-05 World - CS 0x3E8E8A0D.bin", true, false, true, nullptr},
+    m_romInfos[12] = {sz8M, "SR-JV80-06 Dance - CS 0x3EC462E0.bin", true, false, true, nullptr},
+    m_romInfos[13] = {sz8M, "SR-JV80-07 Super Sound Set - CS 0x3F1EE208.bin", true, false, true, nullptr},
+    m_romInfos[14] = {sz8M, "SR-JV80-08 Keyboards of the 60s and 70s - CS 0x3F1E3F0A.BIN", true, false, true, nullptr},
+    m_romInfos[15] = {sz8M, "SR-JV80-09 Session - CS 0x3F381791.BIN", true, false, true, nullptr},
+    m_romInfos[16] = {sz8M, "SR-JV80-10 Bass & Drum - CS 0x3D83D02A.BIN", true, false, true, nullptr},
+    m_romInfos[17] = {sz8M, "SR-JV80-11 Techno - CS 0x3F046250.bin", true, false, true, nullptr},
+    m_romInfos[18] = {sz8M, "SR-JV80-12 HipHop - CS 0x3EA08A19.BIN", true, false, true, nullptr},
+    m_romInfos[19] = {sz8M, "SR-JV80-13 Vocal - CS 0x3ECE78AA.bin", true, false, true, nullptr},
+    m_romInfos[20] = {sz8M, "SR-JV80-14 Asia - CS 0x3C8A1582.bin", true, false, true, nullptr},
+    m_romInfos[21] = {sz8M, "SR-JV80-15 Special FX - CS 0x3F591CE4.bin", true, false, true, nullptr},
+    m_romInfos[22] = {sz8M, "SR-JV80-16 Orchestral II - CS 0x3F35B03B.bin", true, false, true, nullptr},
+    m_romInfos[23] = {sz8M, "SR-JV80-17 Country - CS 0x3ED75089.bin", true, false, true, nullptr},
+    m_romInfos[24] = {sz8M, "SR-JV80-18 Latin - CS 0x3EA51033.BIN", true, false, true, nullptr},
+    m_romInfos[25] = {sz8M, "SR-JV80-19 House - CS 0x3E330C41.BIN", true, false, true, nullptr}
+};
+
 
 CMiniJV880::CMiniJV880(CConfig *pConfig, CInterruptSystem *pInterrupt,
                        CGPIOManager *pGPIOManager, CI2CMaster *pI2CMaster, CSPIMaster *pSPIMaster,
@@ -55,7 +85,8 @@ CMiniJV880::CMiniJV880(CConfig *pConfig, CInterruptSystem *pInterrupt,
       m_pTimer(nullptr),
       m_nBankSwitchTimer(0) {
 
-        CTimer::Get();
+
+      CTimer::Get();
   
       assert(m_pConfig);
 
@@ -118,86 +149,29 @@ bool CMiniJV880::Initialize(void) {
 	ser_options &= ~(SERIAL_OPTION_ONLCR);
 	m_Serial.SetOptions(ser_options);
   LOGNOTE("Serial MIDI Initialized");
+
+    
   
-    if (!m_romLoader.collectPatchData()) {
-    return false;
-    }
-    if (!m_romLoader.loadMainRoms()) {
+    if (!LoadMainRoms(m_pConfig->GetExpRom())) {
         return false;
     }
-    //m_romLoader.switchPatchBank(27);
+    
+    int ret = 0;
 
-    uint8_t* nvram = m_romLoader.getRomData(0);  // jv880_nvram.bin
-    uint8_t* rom1 = m_romLoader.getRomData(1);   // jv880_rom1.bin
-    uint8_t* rom2 = m_romLoader.getRomData(2);   // jv880_rom2.bin
-    uint8_t* pcm1 = m_romLoader.getRomData(3);   // jv880_waverom1.bin
-    uint8_t* pcm2 = m_romLoader.getRomData(4);   // jv880_waverom2.bin
-    uint8_t* exp1 = m_romLoader.getRomData(5);   // SR-JV80-01 Pop - CS 0x3F1CF705.bin
-
-    int ret = mcu.startSC55(rom1, rom2, pcm1, pcm2, nvram, exp1);
+    uint8_t* nvram = (uint8_t*)m_romInfos[0].data;  // jv880_nvram.bin
+    uint8_t* rom1 = (uint8_t*)m_romInfos[1].data;   // jv880_rom1.bin
+    uint8_t* rom2 = (uint8_t*)m_romInfos[2].data;   // jv880_rom2.bin
+    uint8_t* pcm1 = (uint8_t*)m_romInfos[3].data;   // jv880_waverom1.bin
+    uint8_t* pcm2 = (uint8_t*)m_romInfos[4].data;   // jv880_waverom2.bin
+    if (m_pConfig->GetExpRom() == 0) {
+        ret = mcu.startSC55(rom1, rom2, pcm1, pcm2, nvram, nullptr); 
+    } else {
+        uint8_t* exp1 = (uint8_t*)m_romInfos[m_pConfig->GetExpRom() + 6].data;
+        ret = mcu.startSC55(rom1, rom2, pcm1, pcm2, nvram, exp1);
+    }
     if (!ret) {
         LOGNOTE("SC55 emulator started");
     }
-
-/*
-     LOGNOTE("Loading emu files");
-  uint8_t *rom1 = (uint8_t *)malloc(ROM1_SIZE);
-  uint8_t *rom2 = (uint8_t *)malloc(ROM2_SIZE);
-  uint8_t *nvram = (uint8_t *)malloc(NVRAM_SIZE);
-  uint8_t *pcm1 = (uint8_t *)malloc(0x200000);
-  uint8_t *pcm2 = (uint8_t *)malloc(0x200000);
-  uint8_t *exp1 = (uint8_t *)malloc(EXP_SIZE);
-  FIL f;
-  unsigned int nBytesRead = 0;
-
-  if (f_open(&f, "SR-JV80-11.bin", FA_READ | FA_OPEN_EXISTING) != FR_OK) {
-    LOGERR("Cannot open SR-JV80-11.bin");
-    return false;
-  }
-  f_read(&f, exp1, EXP_SIZE, &nBytesRead);
-  f_close(&f);
-
-  if (f_open(&f, "jv880_rom1.bin", FA_READ | FA_OPEN_EXISTING) != FR_OK) {
-    LOGERR("Cannot open jv880_rom1.bin");
-    return false;
-  }
-  f_read(&f, rom1, ROM1_SIZE, &nBytesRead);
-  f_close(&f);
-  if (f_open(&f, "jv880_rom2.bin", FA_READ | FA_OPEN_EXISTING) != FR_OK) {
-    LOGERR("Cannot open jv880_rom2.bin");
-    return false;
-  }
-  f_read(&f, rom2, ROM2_SIZE, &nBytesRead);
-  f_close(&f);
-  if (f_open(&f, "jv880_nvram.bin", FA_READ | FA_OPEN_EXISTING) != FR_OK) {
-    LOGERR("Cannot open jv880_nvram.bin");
-    return false;
-  }
-  f_read(&f, nvram, NVRAM_SIZE, &nBytesRead);
-  f_close(&f);
-  if (f_open(&f, "jv880_waverom1.bin", FA_READ | FA_OPEN_EXISTING) != FR_OK) {
-    LOGERR("Cannot open jv880_waverom1.bin");
-    return false;
-  }
-  f_read(&f, pcm1, 0x200000, &nBytesRead);
-  f_close(&f);
-  if (f_open(&f, "jv880_waverom2.bin", FA_READ | FA_OPEN_EXISTING) != FR_OK) {
-    LOGERR("Cannot open jv880_waverom2.bin");
-    return false;
-  }
-  f_read(&f, pcm2, 0x200000, &nBytesRead);
-  f_close(&f);
-  LOGNOTE("Emu files loaded");
-
-  int ret = mcu.startSC55(rom1, rom2, pcm1, pcm2, nvram, exp1);
-  LOGNOTE("startSC55 returned: %d", ret);
-  free(rom1);
-  free(rom2);
-  free(nvram);
-  free(pcm1);
-  free(pcm2);
-  free(exp1);
-*/
     
   // setup and start the sound device
   int Channels = 2; // 16-bit Stereo
@@ -277,10 +251,10 @@ void CMiniJV880::BankSwitchTimerHandler(TKernelTimerHandle hTimer, void *pParam,
         pThis->m_nBankSwitchTimer = 0; // Clear timer handle
         
         // Perform bank switch
-        pThis->m_romLoader.switchPatchBank(pThis->m_nTargetBank);
+        //pThis->m_CMiniJV880.switchPatchBank(pThis->m_nTargetBank);
 
-        LOGNOTE("Bank switched to %d", pThis->m_nTargetBank);
-         pThis->mcu.SC55_Reset();
+        LOGNOTE("Bank false switched to %d", pThis->m_nTargetBank);
+        // pThis->mcu.SC55_Reset();
     }
 }
 
@@ -323,7 +297,7 @@ void CMiniJV880::ParseMIDIData(CMiniJV880* pThis, const u8* pData, unsigned nLen
                                 // нажали
                                 pThis->m_UI.TriggerUIButtonEvent(ev);
                             } else {
-                                pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventNone);
+                                pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventRelease);
                             }
                             i += 2;
                             return true;
@@ -504,6 +478,141 @@ void CMiniJV880::Run(unsigned nCore) {
 }
 
 
+bool CMiniJV880::LoadMainRoms(uint8_t ExpRom) {
+    LOGNOTE("Loading main ROMs for synthesizer and %d exp", ExpRom);
+    
+    int main_rom_indices[6];
+    unsigned cr;
+    
+    if (ExpRom == 0 || ExpRom > 19) {
+        const int indices[] = {0, 1, 2, 3, 4}; // nvram, rom1, rom2, waverom1, waverom2
+        memcpy(main_rom_indices, indices, sizeof(indices));
+        cr = 5;
+    } else {
+        const int indices[] = {0, 1, 2, 3, 4, ExpRom + 6}; // nvram, rom1, rom2, waverom1, waverom2, expansion
+        memcpy(main_rom_indices, indices, sizeof(indices));
+        cr = 6;
+    }
+    
+    for (unsigned i = 0; i < cr; i++) {
+        int rom_index = main_rom_indices[i];
+        if (!LoadRom(rom_index)) {
+            LOGERR("Failed to load ROM at index %d", rom_index);
+            return false;
+        }
+    }
+    
+    LOGNOTE("All main ROMs loaded successfully");
+    return true;
+}
+
+bool CMiniJV880::LoadRom(uint8_t rom_index) {
+    
+    RomInfo& rom = m_romInfos[rom_index];
+    std::string fullPath = "roms/";
+    fullPath += rom.filename;
+
+    if (rom_index >= ROM_COUNT) {
+        LOGERR("Invalid ROM index: %d", rom_index);
+        return false;
+    }
+    
+    // Check if file exists
+    if (!FileExists(fullPath.c_str())) {
+        LOGERR("ROM file not found: %s", rom.filename);
+        return false;
+    }
+    
+    // Check if already loaded
+    if (rom.isLoaded) {
+        LOGNOTE("ROM %s already loaded", fullPath.c_str());
+        return true;
+    }
+    
+    // Allocate memory
+    rom.data = malloc(rom.size);
+    if (!rom.data) {
+        LOGERR("Not enough memory for %s (size: %zu)", fullPath.c_str(), rom.size);
+        return false;
+    }
+    
+    // Load file
+    if (!LoadFile(fullPath.c_str(), (uint8_t*)rom.data, rom.size)) {
+        LOGERR("Cannot load %s", fullPath.c_str());
+        free(rom.data);
+        rom.data = nullptr;
+        return false;
+    }
+    
+    LOGNOTE("Loaded %s successfully", fullPath.c_str());
+    
+    // Check if descrambling is needed
+    if (rom.needsUnscramble) {
+        uint8_t* descrambled_data = (uint8_t*)malloc(rom.size);
+        if (!descrambled_data) {
+            LOGERR("Not enough memory for descrambled %s", fullPath.c_str());
+            free(rom.data);
+            rom.data = nullptr;
+            return false;
+        }
+        LOGNOTE("Descrambling %s...", rom.filename);
+        UnscrambleRom((uint8_t*)rom.data, descrambled_data, rom.size);
+        free(rom.data);
+        rom.data = descrambled_data;
+        LOGNOTE("Descrambled %s successfully", rom.filename);
+    }
+    
+    // Mark as loaded
+    rom.isLoaded = true;
+    return true;
+}
+
+// Helper function to check if file exists
+bool CMiniJV880::FileExists(const char* filename) {
+    FILE* file = fopen(filename, "rb");
+    if (file) {
+        fclose(file);
+        return true;
+    }
+    return false;
+}
+
+bool CMiniJV880::LoadFile(const char* filename, uint8_t* buffer, size_t size) {
+    FIL f;
+    unsigned int nBytesRead = 0;
+    
+    if (f_open(&f, filename, FA_READ | FA_OPEN_EXISTING) != FR_OK) {
+        LOGERR("Cannot open %s", filename);
+        return false;
+    }
+    f_read(&f, buffer, size, &nBytesRead);
+    f_close(&f);
+    
+    return (nBytesRead == size);
+}
+
+
+void CMiniJV880::UnscrambleRom(const uint8_t *src, uint8_t *dst, int len) {
+    for (int i = 0; i < len; i++) {
+        int address = i & ~0xfffff;
+        static const int aa[] = {2, 0, 3, 4, 1, 9, 13, 10, 18, 17, 6, 15, 11, 16, 8, 5, 12, 7, 14, 19};
+        for (int j = 0; j < 20; j++) {
+            if (i & (1 << j))
+                address |= 1 << aa[j];
+        }
+        uint8_t srcdata = src[address];
+        uint8_t data = 0;
+        static const int dd[] = {2, 0, 4, 5, 7, 6, 3, 1};
+        for (int j = 0; j < 8; j++) {
+            if (srcdata & (1 << dd[j]))
+                data |= 1 << j;
+        }
+        dst[i] = data;
+    }
+}
+
+
+// additional temporary functions 
 void CMiniJV880::LogPCM(uint64_t logcyc1) {
  return;
   LOGNOTE("PCM Update running | MCU cycles: %u", mcu.mcu.cycles);

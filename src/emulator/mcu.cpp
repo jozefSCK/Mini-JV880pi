@@ -775,18 +775,9 @@ int MCU::startSC55(const uint8_t *s_rom1, const uint8_t *s_rom2,
 
   memcpy(pcm.waverom1, s_waverom1, 0x200000);
   memcpy(pcm.waverom2, s_waverom2, 0x200000);
+  if (s_waverom_exp != nullptr) {
   memcpy(pcm.waverom_exp, s_waverom_exp, EXP_SIZE);
-
-  /*
-  memcpy(tempbuf, s_waverom1, 0x200000);
-  unscramble(tempbuf, pcm.waverom1, 0x200000);
-  memcpy(tempbuf, s_waverom2, 0x200000);
-  unscramble(tempbuf, pcm.waverom2, 0x200000);
-  memcpy(tempbuf, s_waverom_exp, EXP_SIZE);
-  unscramble(tempbuf, pcm.waverom_exp, EXP_SIZE);
-
-  free(tempbuf);
-*/
+  }
   SC55_Reset();
 
   return 0;

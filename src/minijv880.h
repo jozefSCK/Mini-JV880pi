@@ -26,7 +26,6 @@
 
 #include "config.h"
 #include "userinterface.h"
-#include "rom.h"
 #include "emulator/mcu.h"
 #include <circle/gpiomanager.h>
 #include <circle/i2cmaster.h>
@@ -43,8 +42,6 @@
 #include <stdint.h>
 #include <circle/serial.h>
 
-
-
 class CMiniJV880 : public CMultiCoreSupport {
 public:
   CMiniJV880(CConfig *pConfig, CInterruptSystem *pInterrupt,
@@ -60,6 +57,11 @@ public:
                                     unsigned nLength);
   static void DeviceRemovedHandler(CDevice *pDevice, void *pContext);
   static void ParseMIDIData(CMiniJV880* pThis, const u8* pData, unsigned nLength);
+  void UnscrambleRom(const uint8_t *src, uint8_t *dst, int len);
+  bool FileExists(const char* filename);
+  bool LoadRom(uint8_t rom_index);
+  bool LoadMainRoms(uint8_t ExpRom);
+  bool LoadFile(const char* filename, uint8_t* data, size_t size);
   void LogMCU(uint64_t logcyc,uint64_t  logwriteptr,int  logsleep,int  logex);
   void LogPCM(uint64_t  logcyc1);
   int s_log_counter = 0;
@@ -67,9 +69,25 @@ public:
 
   MCU mcu;
 
-
-
 private:
+
+  struct RomInfo {
+        size_t size;
+        const char* filename;
+        bool isWaveRom;
+        bool isLoaded;
+        bool needsUnscramble;
+        void* data;
+    };
+
+  static constexpr size_t sz32K = 32 * 1024;
+  static constexpr size_t sz128K = 128 * 1024;
+  static constexpr size_t sz256K = 256 * 1024;
+  static constexpr size_t sz2M = 2 * 1024 * 1024;
+  static constexpr size_t sz8M = 8 * 1024 * 1024;
+
+  static RomInfo m_romInfos[26];
+  static constexpr size_t ROM_COUNT = 26;
 
   CConfig *m_pConfig;
   FATFS *m_pFileSystem;
@@ -84,7 +102,6 @@ private:
   bool m_bChannelsSwapped;
   unsigned m_nQueueSizeFrames;
   CUserInterface m_UI;
-  RomLoader m_romLoader;
 
   unsigned m_lastTick;
   unsigned m_lastTick1;

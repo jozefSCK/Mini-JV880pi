@@ -56,6 +56,7 @@ public:
 	
 	//MCU settings
 	unsigned GetMCUcycles (void) const;
+	unsigned GetExpRom (void) const;
 
 	// Sound device
 	const char *GetSoundDevice (void) const;
@@ -120,6 +121,8 @@ public:
 	unsigned GetButtonPinMonitor (void) const;
 	unsigned GetButtonPinCompare (void) const;
 	unsigned GetButtonPinEnter (void) const;
+	unsigned GetButtonPinUp (void) const;
+	unsigned GetButtonPinDown (void) const;
 
 	// Action type for buttons: "click", "doubleclick", "longpress", ""
 	const char *GetButtonActionPreview (void) const;
@@ -136,6 +139,8 @@ public:
 	const char *GetButtonActionMonitor (void) const;
 	const char *GetButtonActionCompare (void) const;
 	const char *GetButtonActionEnter (void) const;
+	const char *GetButtonActionUp (void) const;
+	const char *GetButtonActionDown (void) const;
 
 	// MIDI buttons navigation
 	unsigned GetMIDIButtonCh   (void) const;
@@ -172,6 +177,7 @@ private:
 	CPropertiesFatFsFile m_Properties;
 	
 	unsigned m_nMCUcycles;
+	unsigned m_nExpRom;
 
 	std::string m_SoundDevice;
 	unsigned m_nChunkSize;
@@ -229,6 +235,8 @@ private:
 	unsigned m_nButtonPinMonitor;
 	unsigned m_nButtonPinCompare;
 	unsigned m_nButtonPinEnter;
+	unsigned m_nButtonPinUp;
+	unsigned m_nButtonPinDown;
 
 	std::string m_ButtonActionPreview;
 	std::string m_ButtonActionLeft;
@@ -244,6 +252,8 @@ private:
 	std::string m_ButtonActionMonitor;
 	std::string m_ButtonActionCompare;
 	std::string m_ButtonActionEnter;
+	std::string m_ButtonActionUp;
+	std::string m_ButtonActionDown;
 	
 	unsigned m_nMIDIButtonCh;
 	unsigned m_nMIDIButtonPreview;

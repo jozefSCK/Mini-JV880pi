@@ -36,7 +36,8 @@ CUIButton::CUIButton (void)
 	m_doubleClickEvent(BtnEventNone),
 	m_longPressEvent(BtnEventNone),
 	m_doubleClickTimeout(0),
-	m_longPressTimeout(0)
+	m_longPressTimeout(0),
+	m_released(false)
 {
 }
 
@@ -52,6 +53,7 @@ void CUIButton::reset (void)
 {
 	m_timer = m_longPressTimeout;
 	m_numClicks = 0;
+	m_released = false;
 }
 
 boolean CUIButton::Initialize (unsigned pinNumber, unsigned doubleClickTimeout, unsigned longPressTimeout)
@@ -128,6 +130,11 @@ CUIButton::BtnTrigger CUIButton::ReadTrigger (void)
 		}
 	}
 
+	if (m_released && m_timer >= m_doubleClickTimeout) {
+		m_released = false;
+		reset();
+		return BtnTriggerRelease;
+	}
 	// Debounce here - we don't need to do anything if the debounce timer is active
 	if (m_debounceTimer < DEBOUNCE_TIME) {
 		m_debounceTimer++;
@@ -180,6 +187,9 @@ CUIButton::BtnTrigger CUIButton::ReadTrigger (void)
 				// This is the second release in a short period of time
 				reset();
 				return BtnTriggerDoubleClick;
+			} else if (m_numClicks == 1 && m_timer < m_doubleClickTimeout) {
+				// Released after first click — wait for potential second click
+				m_released = true; 
 			}
 		}
 	}
@@ -198,6 +208,9 @@ CUIButton::BtnEvent CUIButton::Read (void) {
 	}
 	else if (trigger == BtnTriggerLongPress) {
 		return m_longPressEvent;
+	} 
+	else if (trigger == BtnTriggerRelease) {
+    	return BtnEventRelease;
 	}
 
 	assert (trigger == BtnTriggerNone);
@@ -241,6 +254,8 @@ CUIButtons::CUIButtons (
 			unsigned monitorPin, const char *monitorAction,
 			unsigned comparePin, const char *compareAction,
 			unsigned enterPin, const char *enterAction,
+			unsigned upPin, const char *upAction,
+			unsigned downPin, const char *downAction,
 			unsigned doubleClickTimeout, unsigned longPressTimeout
 )
 :	m_doubleClickTimeout(doubleClickTimeout),
@@ -259,6 +274,8 @@ CUIButtons::CUIButtons (
 	m_monitorPin(monitorPin), m_monitorAction(CUIButton::triggerTypeFromString(monitorAction)),
 	m_comparePin(comparePin), m_compareAction(CUIButton::triggerTypeFromString(compareAction)),
 	m_enterPin(enterPin), m_enterAction(CUIButton::triggerTypeFromString(enterAction)),
+	m_upPin(upPin), m_upAction(CUIButton::triggerTypeFromString(upAction)),
+	m_downPin(downPin), m_downAction(CUIButton::triggerTypeFromString(downAction)),
 	m_eventHandler (0),
 	m_lastTick (0)
 {
@@ -292,13 +309,14 @@ boolean CUIButtons::Initialize (void)
 	unsigned pins[MAX_BUTTONS] = {
 		m_previewPin, m_leftPin, m_rightPin, m_dataPin, m_toneSelectPin,
 		m_patchPerformPin,  m_editPin,  m_systemPin,  m_rhythmPin, 
-		m_utilityPin, m_mutePin, m_monitorPin, m_comparePin, m_enterPin,
+		m_utilityPin, m_mutePin, m_monitorPin, m_comparePin, m_enterPin, m_upPin, m_downPin,
 	};
 	CUIButton::BtnTrigger triggers[MAX_BUTTONS] = {
 		// Normal buttons
 		m_previewAction, m_leftAction, m_rightAction, m_dataAction, m_toneSelectAction,
 		m_patchPerformAction, m_editAction, m_systemAction, m_rhythmAction,
 		m_utilityAction, m_muteAction, m_monitorAction, m_compareAction, m_enterAction,
+		m_upAction, m_downAction,
 	};
 	CUIButton::BtnEvent events[MAX_BUTTONS] = {
 		// Normal buttons
@@ -316,6 +334,8 @@ boolean CUIButtons::Initialize (void)
 		CUIButton::BtnEventMonitor,
 		CUIButton::BtnEventCompare,
 		CUIButton::BtnEventEnter,
+		CUIButton::BtnEventUp,
+		CUIButton::BtnEventDown,
 	};
 
 	// Setup normal GPIO buttons first

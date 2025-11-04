@@ -26,7 +26,7 @@
 
 #define BUTTONS_UPDATE_NUM_TICKS 100
 #define DEBOUNCE_TIME 20
-#define MAX_GPIO_BUTTONS 14  // 14 UI buttons
+#define MAX_GPIO_BUTTONS 17  // 16 UI buttons
 #define MAX_BUTTONS (MAX_GPIO_BUTTONS)
 
 class CUIButtons;
@@ -39,7 +39,8 @@ public:
 		BtnTriggerNone = 0,
 		BtnTriggerClick = 1,
 		BtnTriggerDoubleClick = 2,
-		BtnTriggerLongPress = 3
+		BtnTriggerLongPress = 3,
+		BtnTriggerRelease = 4
 	};
 
 	enum BtnEvent
@@ -59,7 +60,10 @@ public:
 		BtnEventMonitor = 12,
 		BtnEventCompare = 13,
 		BtnEventEnter = 14,
-		BtnEventUnknown = 15
+		BtnEventUnknown = 15,
+		BtnEventUp = 16,
+		BtnEventDown = 17,
+		BtnEventRelease = 18,
 	};
 	
 	CUIButton (void);
@@ -103,6 +107,7 @@ private:
 	unsigned m_doubleClickTimeout;
 	// Timeout for long press in tenths of a millisecond
 	unsigned m_longPressTimeout;
+	bool m_released;
 };
 
 class CUIButtons
@@ -126,6 +131,8 @@ public:
 			unsigned monitorPin, const char *monitorAction,
 			unsigned comparePin, const char *compareAction,
 			unsigned enterPin, const char *enterAction,
+			unsigned upPin, const char *upAction,
+			unsigned downPin, const char *downAction,
 			unsigned doubleClickTimeout, unsigned longPressTimeout
 	);
 	~CUIButtons (void);
@@ -176,6 +183,10 @@ private:
 	CUIButton::BtnTrigger m_compareAction;
 	unsigned m_enterPin;
 	CUIButton::BtnTrigger m_enterAction;
+	unsigned m_upPin;
+	CUIButton::BtnTrigger m_upAction;
+	unsigned m_downPin;
+	CUIButton::BtnTrigger m_downAction;
 
 	BtnEventHandler *m_eventHandler;
 	void *m_eventParam;

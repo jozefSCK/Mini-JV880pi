@@ -36,6 +36,7 @@ void CConfig::Load (void)
 	m_Properties.Load ();
 	
 	m_nMCUcycles = m_Properties.GetNumber ("MCUcycles", 11);
+	m_nExpRom = m_Properties.GetNumber ("ExpRom", 0);
 	m_SoundDevice = m_Properties.GetString ("SoundDevice", "pwm");
 
 	if (m_SoundDevice == "hdmi") {
@@ -102,6 +103,8 @@ void CConfig::Load (void)
 	m_nButtonPinMonitor = m_Properties.GetNumber ("ButtonPinMonitor", 0);
 	m_nButtonPinCompare = m_Properties.GetNumber ("ButtonPinCompare", 0);
 	m_nButtonPinEnter = m_Properties.GetNumber ("ButtonPinEnter", 11);
+	m_nButtonPinUp = m_Properties.GetNumber ("ButtonPinUp", 0);
+	m_nButtonPinDown = m_Properties.GetNumber ("ButtonPinDown", 0);
 
 	m_ButtonActionPreview = m_Properties.GetString ("ButtonActionPreview", "");
 	m_ButtonActionLeft = m_Properties.GetString ("ButtonActionLeft", "");
@@ -117,6 +120,8 @@ void CConfig::Load (void)
 	m_ButtonActionMonitor = m_Properties.GetString ("ButtonActionMonitor", "");
 	m_ButtonActionCompare = m_Properties.GetString ("ButtonActionCompare", "");
 	m_ButtonActionEnter = m_Properties.GetString("ButtonActionEnter", "click");
+	m_ButtonActionUp = m_Properties.GetString("ButtonActionUp", "click");
+	m_ButtonActionDown = m_Properties.GetString("ButtonActionDown", "click");
 
 	// MIDI buttons
 	m_nMIDIButtonCh = m_Properties.GetNumber ("MIDIButtonCh", 0);
@@ -150,6 +155,11 @@ void CConfig::Load (void)
 unsigned CConfig::GetMCUcycles (void) const
 {
 	return m_nMCUcycles;
+}
+
+unsigned CConfig::GetExpRom (void) const
+{
+	return m_nExpRom;
 }
 
 const char *CConfig::GetSoundDevice (void) const
@@ -387,6 +397,16 @@ unsigned CConfig::GetButtonPinEnter (void) const
 	return m_nButtonPinEnter;
 }
 
+unsigned CConfig::GetButtonPinUp (void) const
+{
+	return m_nButtonPinUp;
+}
+
+unsigned CConfig::GetButtonPinDown (void) const
+{
+	return m_nButtonPinDown;
+}
+
 const char *CConfig::GetButtonActionPreview (void) const
 {
 	return m_ButtonActionPreview.c_str();
@@ -455,6 +475,16 @@ const char *CConfig::GetButtonActionCompare (void) const
 const char *CConfig::GetButtonActionEnter (void) const
 {
 	return m_ButtonActionEnter.c_str();
+}
+
+const char *CConfig::GetButtonActionUp (void) const
+{
+	return m_ButtonActionUp.c_str();
+}
+
+const char *CConfig::GetButtonActionDown (void) const
+{
+	return m_ButtonActionDown.c_str();
 }
 
 unsigned CConfig::GetMIDIButtonCh (void) const

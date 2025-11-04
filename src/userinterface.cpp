@@ -106,6 +106,8 @@ bool CUserInterface::Initialize (void)
                   m_pConfig->GetButtonPinMonitor (), m_pConfig->GetButtonActionMonitor (),
                   m_pConfig->GetButtonPinCompare (), m_pConfig->GetButtonActionCompare (),
 									m_pConfig->GetButtonPinEnter (), m_pConfig->GetButtonActionEnter (),
+									m_pConfig->GetButtonPinUp (), m_pConfig->GetButtonActionUp (),
+									m_pConfig->GetButtonPinDown (), m_pConfig->GetButtonActionDown (),
 									m_pConfig->GetDoubleClickTimeout (), m_pConfig->GetLongPressTimeout ()
 								  );
 	assert (m_pUIButtons);
@@ -447,7 +449,7 @@ void CUserInterface::EncoderEventStub (CKY040::TEvent Event, void *pParam)
 void CUserInterface::UIButtonsEventHandler (CUIButton::BtnEvent Event)
 {
 	uint32_t btn = 0;
-	if (Event == CUIButton::BtnEventNone) {
+	if (Event == CUIButton::BtnEventRelease) {
         btn = 0; 
     }
 	if (Event == CUIButton::BtnEventPreview) {
@@ -520,6 +522,13 @@ void CUserInterface::UIButtonsEventHandler (CUIButton::BtnEvent Event)
 	} else {
 		btn &= ~(1 << MCU_BUTTON_ENTER);
 	}
+	if (Event == CUIButton::BtnEventUp) {
+		m_pMiniJV880->mcu.MCU_EncoderTrigger(1);
+	} 
+	if (Event == CUIButton::BtnEventDown) {
+		m_pMiniJV880->mcu.MCU_EncoderTrigger(0);
+	} 
+
 	//LOGNOTE("Button: %x", btn);
 	m_pMiniJV880->mcu.mcu_button_pressed = btn;
 }
