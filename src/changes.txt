@@ -1,0 +1,8 @@
+1.1.0
+Fixed buttons send to SC55
+Added Up and Down buttons if no encoder (check .ini)
+Added synchronized MIDI parser
+Added checksum calculate in sysex messages
+Added Expanded ROM load at start (check .ini)
+Changed .bin loader
+Added save NVRAM via MIDI command (check .ini)
