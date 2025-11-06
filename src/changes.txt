@@ -6,3 +6,4 @@ Added checksum calculate in sysex messages
 Added Expanded ROM load at start (check .ini)
 Changed .bin loader
 Added save NVRAM via MIDI command (check .ini)
+Added checksum to Roland sysex messages sended to JV880

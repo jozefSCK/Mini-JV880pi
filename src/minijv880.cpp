@@ -262,97 +262,6 @@ void CMiniJV880::BankSwitchTimerHandler(TKernelTimerHandle hTimer, void *pParam,
     }
 }
 
-/*void CMiniJV880::ParseMIDIData(CMiniJV880* pThis, const u8* pData, unsigned nLength) {
-    if (nLength == 0) return;
-
-    uint8_t status = pData[0];
-
-    // ===== Priority 1: Note On/Off =====
-    if ((status & 0xF0) == 0x80 || (status & 0xF0) == 0x90) {
-        if (nLength == 3) {
-            pThis->mcu.postMidiSC55(pData, nLength);
-            return;
-        }
-    }
-
-    // ===== Priority 2: Pitch Bend =====
-    if ((status & 0xF0) == 0xE0) {
-        if (nLength == 3) {
-            pThis->mcu.postMidiSC55(pData, nLength);
-            return;
-        }
-    }
-
-    // ===== Priority 3: Modulation (CC 1) =====
-    if ((status & 0xF0) == 0xB0 && nLength == 3 && pData[1] == 1) {
-        pThis->mcu.postMidiSC55(pData, nLength);
-        return;
-    }
-
-    // ===== Priority 4: Bank Switch (CC 32) =====
-    if ((status & 0xF0) == 0xB0 && nLength == 3 && pData[1] == 32) {
-        //ScheduleBankSwitch(pData[2]);
-    }
-
-    // ===== Priority 5: NVRAM Save Trigger =====
-    if ((status & 0xF0) == 0xB0 && nLength == 3 && pData[1] == pThis->m_UI.m_nMIDISaveNVRAM && pData[2] == 0) {
-        pThis->SaveNVRAMIncremental();
-        return;
-    }
-
-    // ===== Priority 6: UI CC Messages =====
-    if ((status & 0xF0) == 0xB0 && nLength == 3) {
-        uint8_t ccNumber = pData[1];
-        uint8_t ccValue  = pData[2];
-
-        if (pThis->m_UI.m_nMIDIButtonChannel != 0) {
-            uint8_t channel = status & 0x0F;
-            uint8_t expected = pThis->m_UI.m_nMIDIButtonChannel - 1;
-
-            if (pThis->m_UI.m_nMIDIButtonChannel == 17 || expected == channel) {
-                auto handleButton = [pThis, ccNumber, ccValue](uint8_t confCC, CUIButton::BtnEvent ev) {
-                    if (ccNumber == confCC) {
-                        if (ccValue < 64) pThis->m_UI.TriggerUIButtonEvent(ev);
-                        else pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventRelease);
-                        return true;
-                    }
-                    return false;
-                };
-
-                if (handleButton(pThis->m_UI.m_nMIDIPreview,      CUIButton::BtnEventPreview)) return;
-                if (handleButton(pThis->m_UI.m_nMIDILeft,         CUIButton::BtnEventLeft))    return;
-                if (handleButton(pThis->m_UI.m_nMIDIRight,        CUIButton::BtnEventRight))   return;
-                if (handleButton(pThis->m_UI.m_nMIDIData,         CUIButton::BtnEventData))    return;
-                if (handleButton(pThis->m_UI.m_nMIDIToneSelect,   CUIButton::BtnEventToneSelect)) return;
-                if (handleButton(pThis->m_UI.m_nMIDIPatchPerform, CUIButton::BtnEventPatchPerform)) return;
-                if (handleButton(pThis->m_UI.m_nMIDIEdit,         CUIButton::BtnEventEdit))    return;
-                if (handleButton(pThis->m_UI.m_nMIDISystem,       CUIButton::BtnEventSystem))  return;
-                if (handleButton(pThis->m_UI.m_nMIDIRhythm,       CUIButton::BtnEventRhythm))  return;
-                if (handleButton(pThis->m_UI.m_nMIDIUtility,      CUIButton::BtnEventUtility)) return;
-                if (handleButton(pThis->m_UI.m_nMIDIMute,         CUIButton::BtnEventMute))    return;
-                if (handleButton(pThis->m_UI.m_nMIDIMonitor,      CUIButton::BtnEventMonitor)) return;
-                if (handleButton(pThis->m_UI.m_nMIDICompare,      CUIButton::BtnEventCompare)) return;
-                if (handleButton(pThis->m_UI.m_nMIDIEnter,        CUIButton::BtnEventEnter))   return;
-
-                // Encoder
-                if (ccNumber == pThis->m_UI.m_nMIDIUp && ccValue < 64) {
-                    pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventRelease);
-                    pThis->mcu.MCU_EncoderTrigger(1);
-                    return;
-                }
-                if (ccNumber == pThis->m_UI.m_nMIDIDown && ccValue < 64) {
-                    pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventRelease);
-                    pThis->mcu.MCU_EncoderTrigger(0);
-                    return;
-                }
-            }
-        }
-    }
-
-    // ===== All other messages (including SysEx) =====
-    pThis->mcu.postMidiSC55(pData, nLength);
-}*/
-
 void CMiniJV880::HandleFullMIDIMessage(const uint8_t* pData, uint8_t nLength)
 {
     if (nLength == 0) return;
@@ -440,8 +349,48 @@ void CMiniJV880::HandleFullMIDIMessage(const uint8_t* pData, uint8_t nLength)
             }
         }
     }
+    // add checksum for Roland sysex messages 
+    if (status == 0xF0 && nLength > 6) {
+        // Check if it's a Roland SysEx message
+        if (pData[1] == 0x41) {
+            // Roland SysEx format:
+            // F0 41 <dev> <model> <cmd> <addr1> <addr2> <addr3> <addr4> <data...> [chk] F7
 
-    // ===== All other messages (including SysEx) =====
+            int addr_start = 5;   // address start index
+            int addr_len   = 4;   // address length (usually 4 bytes)
+
+            bool hasF7 = (pData[nLength - 1] == 0xF7);
+            int data_end = hasF7 ? nLength - 1 : nLength;  // cut F7 if present
+
+            // Calculate data length (without checksum)
+            int data_len = data_end - (addr_start + addr_len);
+            if (data_len > 0) {
+                const uint8_t* addr_ptr = &pData[addr_start];
+                const uint8_t* data_ptr = &pData[addr_start + addr_len];
+
+                // ---- Roland checksum calculation ----
+                int sum = 0;
+                for (int i = 0; i < addr_len; i++) sum += addr_ptr[i];
+                for (int i = 0; i < data_len; i++) sum += data_ptr[i];
+                sum &= 0x7F;
+                uint8_t checksum = (128 - sum) & 0x7F;
+                // -------------------------------------
+
+                // Create new SysEx with added checksum and F7
+                uint8_t out[128];
+                int out_len = 0;
+
+                memcpy(out, pData, data_end);
+                out[out_len = data_end] = checksum;
+                out[++out_len] = 0xF7;
+
+                mcu.postMidiSC55(out, out_len);
+                return;
+            }
+        }
+    }
+
+    // ===== All other messages (excluding SysEx) =====
     mcu.postMidiSC55(pData, nLength);
 }
 
