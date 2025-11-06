@@ -84,6 +84,7 @@ bool CUserInterface::Initialize (void)
     m_nMIDIEnter = 			m_pConfig->GetMIDIButtonEnter() & 0x7F; 
 	m_nMIDIUp = 			m_pConfig->GetMIDIButtonUp() & 0x7F; 
 	m_nMIDIDown = 			m_pConfig->GetMIDIButtonDown() & 0x7F; 
+	m_nMIDISaveNVRAM = 		m_pConfig->GetMIDISaveNVRAM() & 0x7F; 
 
 	
 	if (!LCDInit()) {

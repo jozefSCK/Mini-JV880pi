@@ -26,6 +26,7 @@
 
 #include "config.h"
 #include "userinterface.h"
+#include "midi.h"
 #include "emulator/mcu.h"
 #include <circle/gpiomanager.h>
 #include <circle/i2cmaster.h>
@@ -52,11 +53,19 @@ public:
   void Process(bool bPlugAndPlayUpdated);
 
   virtual void Run(unsigned nCore) override;
+  
 
   static void USBMIDIMessageHandler(unsigned nCable, u8 *pPacket,
                                     unsigned nLength);
   static void DeviceRemovedHandler(CDevice *pDevice, void *pContext);
-  static void ParseMIDIData(CMiniJV880* pThis, const u8* pData, unsigned nLength);
+  
+  MidiParser midiParser;
+    CSerialDevice& GetSerial() { return m_Serial; }
+     uint8_t* GetMIDIBuffer() { return m_MIDIBuffer; }
+
+    // MIDI
+    void HandleFullMIDIMessage(const uint8_t* data, uint8_t length);
+  //static void ParseMIDIData(CMiniJV880* pThis, const u8* pData, unsigned nLength);
   void UnscrambleRom(const uint8_t *src, uint8_t *dst, int len);
   bool FileExists(const char* filename);
   bool LoadRom(uint8_t rom_index);
@@ -66,6 +75,7 @@ public:
   void LogPCM(uint64_t  logcyc1);
   int s_log_counter = 0;
   void ScheduleBankSwitch(int bankNumber);
+  void SaveNVRAMIncremental();
 
   MCU mcu;
 
@@ -94,6 +104,7 @@ private:
 
   CUSBMIDIDevice *volatile m_pMIDIDevice = 0;
   CSerialDevice m_Serial;
+  uint8_t m_MIDIBuffer[256];
   
   int lastEncoderPos = 0;
 
@@ -114,6 +125,7 @@ private:
 
   static CMiniJV880 *s_pThis;
   unsigned n_mMCUcycles = 9;
+  int m_nNVRAMSaveCounter = 0;
   
 
 

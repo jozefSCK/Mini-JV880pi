@@ -17,7 +17,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
-#include "minijv880.h" //#include "roms.h"
+#include "minijv880.h" 
+#include "midi.h"
 #include "userinterface.h"
 #include <assert.h>
 #include <circle/memory.h>
@@ -149,6 +150,7 @@ bool CMiniJV880::Initialize(void) {
 	ser_options &= ~(SERIAL_OPTION_ONLCR);
 	m_Serial.SetOptions(ser_options);
   LOGNOTE("Serial MIDI Initialized");
+    midiParser.Init(this);
 
     
   
@@ -203,6 +205,11 @@ void CMiniJV880::Process(bool bPlugAndPlayUpdated) {
 
   m_UI.Process ();
 
+  int nRead = m_Serial.Read(m_MIDIBuffer, sizeof(m_MIDIBuffer));
+    if (nRead > 0) {
+        midiParser.FeedSerialBytes(m_MIDIBuffer, nRead);  // <<<<< ТУТ
+    }
+
   if (!bPlugAndPlayUpdated)
     return;
 
@@ -218,11 +225,8 @@ void CMiniJV880::Process(bool bPlugAndPlayUpdated) {
 
 void CMiniJV880::USBMIDIMessageHandler(unsigned nCable, u8 *pPacket,
                                        unsigned nLength) {
-  // LOGERR("CMiniJV880::USBMIDIMessageHandler");
-  CMiniJV880 *pThis = static_cast<CMiniJV880 *>(s_pThis);
   if (!pPacket || nLength == 0) return;
-  ParseMIDIData(pThis, pPacket, nLength);
-  //pThis->mcu.postMidiSC55(pPacket, nLength);
+  s_pThis->midiParser.FeedUSBMIDIPacket(pPacket, nLength);
 }
 
 // Schedule bank switch with 2-second delay to handle multiple rapid changes
@@ -258,97 +262,236 @@ void CMiniJV880::BankSwitchTimerHandler(TKernelTimerHandle hTimer, void *pParam,
     }
 }
 
-void CMiniJV880::ParseMIDIData(CMiniJV880* pThis, const u8* pData, unsigned nLength)
-{
-    for (unsigned i = 0; i < nLength; i++)
-    {
-        u8 status = pData[i];
+/*void CMiniJV880::ParseMIDIData(CMiniJV880* pThis, const u8* pData, unsigned nLength) {
+    if (nLength == 0) return;
 
-        if ((status & 0xF0) == 0xB0 && i + 2 < nLength) 
-        {
-            u8 ccNumber = pData[i + 1];
-            u8 ccValue  = pData[i + 2];
+    uint8_t status = pData[0];
 
-                        if (ccNumber == 0) { // Bank Select MSB
-                // Schedule bank switch based on MSB value
-                pThis->ScheduleBankSwitch(ccValue);
-                i += 2;
-                continue;
-            }
-            else if (ccNumber == 32) { // Bank Select LSB
-                // If you need to combine MSB and LSB, you'd need to track both
-                // For now, just use LSB as bank number
-                pThis->ScheduleBankSwitch(ccValue);
-                i += 2;
-                continue;
-            }
-
-            if (pThis->m_UI.m_nMIDIButtonChannel != 0) 
-            {
-                u8 channel         = status & 0x0F;
-                u8 expectedChannel = pThis->m_UI.m_nMIDIButtonChannel - 1;
-
-                // OMNI (17) 
-                if (pThis->m_UI.m_nMIDIButtonChannel == 17 || expectedChannel == channel) 
-                {
-                    auto handleButton = [&](u8 confCC, CUIButton::BtnEvent ev) {
-                        if (ccNumber == confCC) {
-                            if (ccValue < 64) {
-                                // нажали
-                                pThis->m_UI.TriggerUIButtonEvent(ev);
-                            } else {
-                                pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventRelease);
-                            }
-                            i += 2;
-                            return true;
-                        }
-                        return false;
-                    };
-
-                    if (handleButton(pThis->m_UI.m_nMIDIPreview,      CUIButton::BtnEventPreview)) continue;
-                    if (handleButton(pThis->m_UI.m_nMIDILeft,         CUIButton::BtnEventLeft)) continue;
-                    if (handleButton(pThis->m_UI.m_nMIDIRight,        CUIButton::BtnEventRight)) continue;
-                    if (handleButton(pThis->m_UI.m_nMIDIData,         CUIButton::BtnEventData)) continue;
-                    if (handleButton(pThis->m_UI.m_nMIDIToneSelect,   CUIButton::BtnEventToneSelect)) continue;
-                    if (handleButton(pThis->m_UI.m_nMIDIPatchPerform, CUIButton::BtnEventPatchPerform)) continue;
-                    if (handleButton(pThis->m_UI.m_nMIDIEdit,         CUIButton::BtnEventEdit)) continue;
-                    if (handleButton(pThis->m_UI.m_nMIDISystem,       CUIButton::BtnEventSystem)) continue;
-                    if (handleButton(pThis->m_UI.m_nMIDIRhythm,       CUIButton::BtnEventRhythm)) continue;
-                    if (handleButton(pThis->m_UI.m_nMIDIUtility,      CUIButton::BtnEventUtility)) continue;
-                    if (handleButton(pThis->m_UI.m_nMIDIMute,         CUIButton::BtnEventMute)) continue;
-                    if (handleButton(pThis->m_UI.m_nMIDIMonitor,      CUIButton::BtnEventMonitor)) continue;
-                    if (handleButton(pThis->m_UI.m_nMIDICompare,      CUIButton::BtnEventCompare)) continue;
-                    if (handleButton(pThis->m_UI.m_nMIDIEnter,        CUIButton::BtnEventEnter)) continue;
-
-                    // Encoder
-                    if (ccNumber == pThis->m_UI.m_nMIDIUp && ccValue < 64) {
-                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventNone);
-                        pThis->mcu.MCU_EncoderTrigger(1);
-                        i += 2;
-                        continue;
-                    }
-                    if (ccNumber == pThis->m_UI.m_nMIDIDown && ccValue < 64) {
-                        pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventNone);
-                        pThis->mcu.MCU_EncoderTrigger(0);
-                        i += 2;
-                        continue;
-                    }
-                }
-            }
-
-            i += 2;
-        }
-
-        // Also handle Program Change (0xC0) - single byte bank change
-        else if ((status & 0xF0) == 0xC0 && i + 1 < nLength) {
-            u8 programNumber = pData[i + 1];
-            pThis->ScheduleBankSwitch(programNumber);
-            i += 1; // Program Change has 1 data byte
+    // ===== Priority 1: Note On/Off =====
+    if ((status & 0xF0) == 0x80 || (status & 0xF0) == 0x90) {
+        if (nLength == 3) {
+            pThis->mcu.postMidiSC55(pData, nLength);
+            return;
         }
     }
 
+    // ===== Priority 2: Pitch Bend =====
+    if ((status & 0xF0) == 0xE0) {
+        if (nLength == 3) {
+            pThis->mcu.postMidiSC55(pData, nLength);
+            return;
+        }
+    }
+
+    // ===== Priority 3: Modulation (CC 1) =====
+    if ((status & 0xF0) == 0xB0 && nLength == 3 && pData[1] == 1) {
+        pThis->mcu.postMidiSC55(pData, nLength);
+        return;
+    }
+
+    // ===== Priority 4: Bank Switch (CC 32) =====
+    if ((status & 0xF0) == 0xB0 && nLength == 3 && pData[1] == 32) {
+        //ScheduleBankSwitch(pData[2]);
+    }
+
+    // ===== Priority 5: NVRAM Save Trigger =====
+    if ((status & 0xF0) == 0xB0 && nLength == 3 && pData[1] == pThis->m_UI.m_nMIDISaveNVRAM && pData[2] == 0) {
+        pThis->SaveNVRAMIncremental();
+        return;
+    }
+
+    // ===== Priority 6: UI CC Messages =====
+    if ((status & 0xF0) == 0xB0 && nLength == 3) {
+        uint8_t ccNumber = pData[1];
+        uint8_t ccValue  = pData[2];
+
+        if (pThis->m_UI.m_nMIDIButtonChannel != 0) {
+            uint8_t channel = status & 0x0F;
+            uint8_t expected = pThis->m_UI.m_nMIDIButtonChannel - 1;
+
+            if (pThis->m_UI.m_nMIDIButtonChannel == 17 || expected == channel) {
+                auto handleButton = [pThis, ccNumber, ccValue](uint8_t confCC, CUIButton::BtnEvent ev) {
+                    if (ccNumber == confCC) {
+                        if (ccValue < 64) pThis->m_UI.TriggerUIButtonEvent(ev);
+                        else pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventRelease);
+                        return true;
+                    }
+                    return false;
+                };
+
+                if (handleButton(pThis->m_UI.m_nMIDIPreview,      CUIButton::BtnEventPreview)) return;
+                if (handleButton(pThis->m_UI.m_nMIDILeft,         CUIButton::BtnEventLeft))    return;
+                if (handleButton(pThis->m_UI.m_nMIDIRight,        CUIButton::BtnEventRight))   return;
+                if (handleButton(pThis->m_UI.m_nMIDIData,         CUIButton::BtnEventData))    return;
+                if (handleButton(pThis->m_UI.m_nMIDIToneSelect,   CUIButton::BtnEventToneSelect)) return;
+                if (handleButton(pThis->m_UI.m_nMIDIPatchPerform, CUIButton::BtnEventPatchPerform)) return;
+                if (handleButton(pThis->m_UI.m_nMIDIEdit,         CUIButton::BtnEventEdit))    return;
+                if (handleButton(pThis->m_UI.m_nMIDISystem,       CUIButton::BtnEventSystem))  return;
+                if (handleButton(pThis->m_UI.m_nMIDIRhythm,       CUIButton::BtnEventRhythm))  return;
+                if (handleButton(pThis->m_UI.m_nMIDIUtility,      CUIButton::BtnEventUtility)) return;
+                if (handleButton(pThis->m_UI.m_nMIDIMute,         CUIButton::BtnEventMute))    return;
+                if (handleButton(pThis->m_UI.m_nMIDIMonitor,      CUIButton::BtnEventMonitor)) return;
+                if (handleButton(pThis->m_UI.m_nMIDICompare,      CUIButton::BtnEventCompare)) return;
+                if (handleButton(pThis->m_UI.m_nMIDIEnter,        CUIButton::BtnEventEnter))   return;
+
+                // Encoder
+                if (ccNumber == pThis->m_UI.m_nMIDIUp && ccValue < 64) {
+                    pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventRelease);
+                    pThis->mcu.MCU_EncoderTrigger(1);
+                    return;
+                }
+                if (ccNumber == pThis->m_UI.m_nMIDIDown && ccValue < 64) {
+                    pThis->m_UI.TriggerUIButtonEvent(CUIButton::BtnEventRelease);
+                    pThis->mcu.MCU_EncoderTrigger(0);
+                    return;
+                }
+            }
+        }
+    }
+
+    // ===== All other messages (including SysEx) =====
     pThis->mcu.postMidiSC55(pData, nLength);
+}*/
+
+void CMiniJV880::HandleFullMIDIMessage(const uint8_t* pData, uint8_t nLength)
+{
+    if (nLength == 0) return;
+
+    uint8_t status = pData[0];
+
+    // ===== Priority 1: Note On/Off =====
+    if ((status & 0xF0) == 0x80 || (status & 0xF0) == 0x90) {
+        if (nLength == 3) {
+            mcu.postMidiSC55(pData, nLength);
+            return;
+        }
+    }
+
+    // ===== Priority 2: Pitch Bend =====
+    if ((status & 0xF0) == 0xE0) {
+        if (nLength == 3) {
+            mcu.postMidiSC55(pData, nLength);
+            return;
+        }
+    }
+
+    // ===== Priority 3: Modulation (CC 1) =====
+    if ((status & 0xF0) == 0xB0 && nLength == 3 && pData[1] == 1) {
+        mcu.postMidiSC55(pData, nLength);
+        return;
+    }
+
+    // ===== Priority 4: Bank Switch (CC 32) =====
+    if ((status & 0xF0) == 0xB0 && nLength == 3 && pData[1] == 32) {
+        //ScheduleBankSwitch(pData[2]);
+    }
+
+    // ===== Priority 5: NVRAM Save Trigger =====
+    if ((status & 0xF0) == 0xB0 && nLength == 3 && pData[1] == m_UI.m_nMIDISaveNVRAM && pData[2] == 0) {
+        SaveNVRAMIncremental();
+        return;
+    }
+
+    // ===== Priority 6: UI CC Messages =====
+    if ((status & 0xF0) == 0xB0 && nLength == 3) {
+        uint8_t ccNumber = pData[1];
+        uint8_t ccValue  = pData[2];
+
+        if (m_UI.m_nMIDIButtonChannel != 0) {
+            uint8_t channel = status & 0x0F;
+            uint8_t expected = m_UI.m_nMIDIButtonChannel - 1;
+
+            if (m_UI.m_nMIDIButtonChannel == 17 || expected == channel) {
+                auto handleButton = [this, ccNumber, ccValue](uint8_t confCC, CUIButton::BtnEvent ev) {
+                    if (ccNumber == confCC) {
+                        if (ccValue < 64) m_UI.TriggerUIButtonEvent(ev);
+                        else m_UI.TriggerUIButtonEvent(CUIButton::BtnEventRelease);
+                        return true;
+                    }
+                    return false;
+                };
+
+                if (handleButton(m_UI.m_nMIDIPreview,      CUIButton::BtnEventPreview)) return;
+                if (handleButton(m_UI.m_nMIDILeft,         CUIButton::BtnEventLeft))    return;
+                if (handleButton(m_UI.m_nMIDIRight,        CUIButton::BtnEventRight))   return;
+                if (handleButton(m_UI.m_nMIDIData,         CUIButton::BtnEventData))    return;
+                if (handleButton(m_UI.m_nMIDIToneSelect,   CUIButton::BtnEventToneSelect)) return;
+                if (handleButton(m_UI.m_nMIDIPatchPerform, CUIButton::BtnEventPatchPerform)) return;
+                if (handleButton(m_UI.m_nMIDIEdit,         CUIButton::BtnEventEdit))    return;
+                if (handleButton(m_UI.m_nMIDISystem,       CUIButton::BtnEventSystem))  return;
+                if (handleButton(m_UI.m_nMIDIRhythm,       CUIButton::BtnEventRhythm))  return;
+                if (handleButton(m_UI.m_nMIDIUtility,      CUIButton::BtnEventUtility)) return;
+                if (handleButton(m_UI.m_nMIDIMute,         CUIButton::BtnEventMute))    return;
+                if (handleButton(m_UI.m_nMIDIMonitor,      CUIButton::BtnEventMonitor)) return;
+                if (handleButton(m_UI.m_nMIDICompare,      CUIButton::BtnEventCompare)) return;
+                if (handleButton(m_UI.m_nMIDIEnter,        CUIButton::BtnEventEnter))   return;
+
+                // Encoder
+                if (ccNumber == m_UI.m_nMIDIUp && ccValue < 64) {
+                    m_UI.TriggerUIButtonEvent(CUIButton::BtnEventRelease);
+                    mcu.MCU_EncoderTrigger(1);
+                    return;
+                }
+                if (ccNumber == m_UI.m_nMIDIDown && ccValue < 64) {
+                    m_UI.TriggerUIButtonEvent(CUIButton::BtnEventRelease);
+                    mcu.MCU_EncoderTrigger(0);
+                    return;
+                }
+            }
+        }
+    }
+
+    // ===== All other messages (including SysEx) =====
+    mcu.postMidiSC55(pData, nLength);
 }
+
+void CMiniJV880::SaveNVRAMIncremental() {
+    char filename[64];
+    
+    // Ensure the directory exists first
+    FRESULT dirRes = f_mkdir("nvram");
+    if (dirRes != FR_OK && dirRes != FR_EXIST) {
+        LOGERR("Cannot create nvram directory, error: %d", dirRes);
+        return;
+    }
+    
+    // Find a free filename
+    FIL file;
+    FRESULT res;
+    
+    do {
+        sprintf(filename, "nvram/jv880_nvram%d.bin", ++m_nNVRAMSaveCounter);
+        
+        // Try to open file for reading to check if it exists
+        res = f_open(&file, filename, FA_READ);
+        if (res == FR_OK) {
+            // File exists - close and try next number
+            f_close(&file);
+        }
+    } while (res == FR_OK); // Continue while we find existing files
+    
+    // Now filename contains a non-existing filename
+    // Open for writing
+    res = f_open(&file, filename, FA_WRITE | FA_CREATE_ALWAYS);
+    if (res != FR_OK) {
+        LOGERR("Cannot open file %s for writing, error: %d", filename, res);
+        return;
+    }
+    
+    // Write NVRAM data to file
+    UINT bytesWritten;
+    res = f_write(&file, mcu.nvram, 0x8000, &bytesWritten);
+    f_close(&file);
+    
+    // Check if write was successful
+    if (res == FR_OK && bytesWritten == 0x8000) {
+        LOGNOTE("NVRAM saved to %s", filename);
+    } else {
+        LOGERR("Failed to save NVRAM to %s, written: %d bytes, error: %d", 
+               filename, bytesWritten, res);
+    }
+}
+
 
 void CMiniJV880::DeviceRemovedHandler(CDevice *pDevice, void *pContext) {
   LOGERR("CMiniJV880::DeviceRemovedHandler");
@@ -363,17 +506,9 @@ void CMiniJV880::DeviceRemovedHandler(CDevice *pDevice, void *pContext) {
 void CMiniJV880::Run(unsigned nCore) {
     assert(1 <= nCore && nCore < CORES);
     //int nSamples = 0;
-    u8 buffer[64];
+    
 
-    if (nCore == 1) { // 1st core - serial MIDI
-        while (true) {
-            int nRead = m_Serial.Read(buffer, sizeof(buffer));
-            if (nRead > 0)
-                ParseMIDIData(this, buffer, nRead);
-            CTimer::SimpleMsDelay(1);
-        }
-    } 
-    else if (nCore == 2) { // 2nd core - MCU + audio output
+    if (nCore == 2) { // 2nd core - MCU + audio output
         const int MCU_INSTR_BURST = 64;
         //unsigned log_counter = 0;
         while (true) {
@@ -508,15 +643,15 @@ bool CMiniJV880::LoadMainRoms(uint8_t ExpRom) {
 
 bool CMiniJV880::LoadRom(uint8_t rom_index) {
     
-    RomInfo& rom = m_romInfos[rom_index];
-    std::string fullPath = "roms/";
-    fullPath += rom.filename;
-
     if (rom_index >= ROM_COUNT) {
         LOGERR("Invalid ROM index: %d", rom_index);
         return false;
     }
-    
+
+    RomInfo& rom = m_romInfos[rom_index];
+    std::string fullPath = "roms/";
+    fullPath += rom.filename;
+
     // Check if file exists
     if (!FileExists(fullPath.c_str())) {
         LOGERR("ROM file not found: %s", rom.filename);
@@ -580,15 +715,25 @@ bool CMiniJV880::FileExists(const char* filename) {
 bool CMiniJV880::LoadFile(const char* filename, uint8_t* buffer, size_t size) {
     FIL f;
     unsigned int nBytesRead = 0;
-    
+
     if (f_open(&f, filename, FA_READ | FA_OPEN_EXISTING) != FR_OK) {
         LOGERR("Cannot open %s", filename);
         return false;
     }
-    f_read(&f, buffer, size, &nBytesRead);
+    FRESULT fr = f_read(&f, buffer, size, &nBytesRead);
     f_close(&f);
-    
-    return (nBytesRead == size);
+
+    if (fr != FR_OK) {
+        LOGERR("f_read error %d for %s", fr, filename);
+        return false;
+    }
+
+    if (nBytesRead != size) {
+        LOGERR("Unexpected file size for %s: expected %zu, read %u", filename, size, nBytesRead);
+        return false;
+    }
+
+    return true;
 }
 
 

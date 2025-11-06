@@ -65,6 +65,7 @@ public:
     unsigned m_nMIDIEnter;
 	unsigned m_nMIDIUp;
 	unsigned m_nMIDIDown;
+	unsigned m_nMIDISaveNVRAM;
 
 private:
 
