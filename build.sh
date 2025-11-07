@@ -81,5 +81,5 @@ make -j
 ls *.img
 cd ..
 
-mkdir -p releases
-cp src/kernel8.img "releases/MiniJV880-${VERSION}.img"
+# mkdir -p releases
+# cp src/kernel8.img "releases/MiniJV880-${VERSION}.img"

@@ -350,43 +350,31 @@ void CMiniJV880::HandleFullMIDIMessage(const uint8_t* pData, uint8_t nLength)
         }
     }
     // add checksum for Roland sysex messages 
-    if (status == 0xF0 && nLength > 6) {
-        // Check if it's a Roland SysEx message
+    if (status == 0xF0 && nLength > 6 && pData[nLength - 1] == 0xF7) {
         if (pData[1] == 0x41) {
-            // Roland SysEx format:
-            // F0 41 <dev> <model> <cmd> <addr1> <addr2> <addr3> <addr4> <data...> [chk] F7
+            int chk_idx = nLength - 2;
+            if (chk_idx < 5) return;
 
-            int addr_start = 5;   // address start index
-            int addr_len   = 4;   // address length (usually 4 bytes)
+            int sum = 0;
+            for (int i = 2; i < chk_idx; i++) sum += pData[i];
+            sum &= 0x7F;
+            uint8_t checksum = (128 - sum) & 0x7F;
 
-            bool hasF7 = (pData[nLength - 1] == 0xF7);
-            int data_end = hasF7 ? nLength - 1 : nLength;  // cut F7 if present
+            uint8_t out[256];
+            memcpy(out, pData, nLength);
+            out[chk_idx] = checksum;
 
-            // Calculate data length (without checksum)
-            int data_len = data_end - (addr_start + addr_len);
-            if (data_len > 0) {
-                const uint8_t* addr_ptr = &pData[addr_start];
-                const uint8_t* data_ptr = &pData[addr_start + addr_len];
-
-                // ---- Roland checksum calculation ----
-                int sum = 0;
-                for (int i = 0; i < addr_len; i++) sum += addr_ptr[i];
-                for (int i = 0; i < data_len; i++) sum += data_ptr[i];
-                sum &= 0x7F;
-                uint8_t checksum = (128 - sum) & 0x7F;
-                // -------------------------------------
-
-                // Create new SysEx with added checksum and F7
-                uint8_t out[128];
-                int out_len = 0;
-
-                memcpy(out, pData, data_end);
-                out[out_len = data_end] = checksum;
-                out[++out_len] = 0xF7;
-
-                mcu.postMidiSC55(out, out_len);
-                return;
+            // Log full outgoing SysEx in HEX
+            char buf[512];
+            int len = 0;
+            for (int i = 0; i < nLength && len < sizeof(buf) - 4; i++) {
+                len += snprintf(buf + len, sizeof(buf) - len, "%02X ", out[i]);
             }
+            if (len > 0) buf[len - 1] = 0; // remove trailing space
+            LOGNOTE(buf);
+
+            mcu.postMidiSC55(out, nLength);
+            return;
         }
     }
 
@@ -563,7 +551,7 @@ void CMiniJV880::Run(unsigned nCore) {
 
 
 bool CMiniJV880::LoadMainRoms(uint8_t ExpRom) {
-    LOGNOTE("Loading main ROMs for synthesizer and %d exp", ExpRom);
+    //LOGNOTE("Loading main ROMs for synthesizer and %d exp", ExpRom);
     
     int main_rom_indices[6];
     unsigned cr;
@@ -609,7 +597,7 @@ bool CMiniJV880::LoadRom(uint8_t rom_index) {
     
     // Check if already loaded
     if (rom.isLoaded) {
-        LOGNOTE("ROM %s already loaded", fullPath.c_str());
+        //LOGNOTE("ROM %s already loaded", fullPath.c_str());
         return true;
     }
     
@@ -628,7 +616,7 @@ bool CMiniJV880::LoadRom(uint8_t rom_index) {
         return false;
     }
     
-    LOGNOTE("Loaded %s successfully", fullPath.c_str());
+    //LOGNOTE("Loaded %s successfully", fullPath.c_str());
     
     // Check if descrambling is needed
     if (rom.needsUnscramble) {
@@ -639,11 +627,11 @@ bool CMiniJV880::LoadRom(uint8_t rom_index) {
             rom.data = nullptr;
             return false;
         }
-        LOGNOTE("Descrambling %s...", rom.filename);
+        //LOGNOTE("Descrambling %s...", rom.filename);
         UnscrambleRom((uint8_t*)rom.data, descrambled_data, rom.size);
         free(rom.data);
         rom.data = descrambled_data;
-        LOGNOTE("Descrambled %s successfully", rom.filename);
+        //LOGNOTE("Descrambled %s successfully", rom.filename);
     }
     
     // Mark as loaded
