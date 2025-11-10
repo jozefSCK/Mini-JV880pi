@@ -492,7 +492,7 @@ void CMiniJV880::Run(unsigned nCore) {
     }
     else if (nCore == 3) { // 3rd core - PCM Update
         constexpr uint64_t MCU_CLOCK_HZ = 12000000ull; // if your MCU clock differs, set accordingly
-        constexpr uint32_t AUDIO_RATE = 32000u;
+        constexpr uint32_t AUDIO_RATE = 64000u;
         constexpr uint64_t CYCLES_PER_SAMPLE = MCU_CLOCK_HZ / AUDIO_RATE; // 375 typical for H8@12MHz
         //constexpr uint64_t CYCLES_PER_SAMPLE_FP = CYCLES_PER_SAMPLE << 32; // fixed-point
         const uint32_t MAX_SAMPLES_PER_ITER = 128; // bound to avoid huge bursts
