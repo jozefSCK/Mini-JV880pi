@@ -42,6 +42,7 @@
 #include <fatfs/ff.h>
 #include <stdint.h>
 #include <circle/serial.h>
+#include <atomic>
 
 class CMiniJV880 : public CMultiCoreSupport {
 public:
@@ -74,8 +75,8 @@ public:
   void LogMCU(uint64_t logcyc,uint64_t  logwriteptr,int  logsleep,int  logex);
   void LogPCM(uint64_t  logcyc1);
   int s_log_counter = 0;
-  void ScheduleBankSwitch(int bankNumber);
   void SaveNVRAMIncremental();
+  void switchPatchBank(int bankNumber);
 
   MCU mcu;
 
@@ -117,15 +118,11 @@ private:
   unsigned m_lastTick;
   unsigned m_lastTick1;
 
-    volatile bool m_bNeedBankSwitch;
-    volatile int m_nTargetBank;
-    CTimer *m_pTimer;
-    TKernelTimerHandle m_nBankSwitchTimer; // Timer handle for bank switching
-    static void BankSwitchTimerHandler(TKernelTimerHandle hTimer, void *pParam, void *pContext);
-
   static CMiniJV880 *s_pThis;
   unsigned n_mMCUcycles = 9;
   int m_nNVRAMSaveCounter = 0;
+  std::atomic<int> m_nPendingBankSwitch{-1};
+  std::atomic<bool> m_bAudioPaused{false};
   
 
 

@@ -80,11 +80,7 @@ CMiniJV880::CMiniJV880(CConfig *pConfig, CInterruptSystem *pInterrupt,
       m_bChannelsSwapped(pConfig->GetChannelsSwapped()),
       m_UI(this, pGPIOManager, pI2CMaster, pSPIMaster, pConfig),
       m_lastTick(0),
-      m_lastTick1(0),
-      m_bNeedBankSwitch(false),
-      m_nTargetBank(0),
-      m_pTimer(nullptr),
-      m_nBankSwitchTimer(0) {
+      m_lastTick1(0) {
 
 
       CTimer::Get();
@@ -100,7 +96,7 @@ CMiniJV880::CMiniJV880(CConfig *pConfig, CInterruptSystem *pInterrupt,
   if (strcmp(pDeviceName, "i2s") == 0) {
     LOGNOTE("I2S mode");
     m_pSoundDevice = new CI2SSoundBaseDevice(
-        pInterrupt, 32000, pConfig->GetChunkSize(), false, pI2CMaster,
+        pInterrupt, pConfig->GetSampleRate(), pConfig->GetChunkSize(), false, pI2CMaster,
         pConfig->GetDACI2CAddress(), CI2SSoundBaseDevice::DeviceModeTXOnly,
         2); // 2 channels - L+R
   } else if (strcmp(pDeviceName, "hdmi") == 0) {
@@ -110,7 +106,7 @@ CMiniJV880::CMiniJV880(CConfig *pConfig, CInterruptSystem *pInterrupt,
     LOGNOTE("HDMI mode");
 
     m_pSoundDevice =
-        new CHDMISoundBaseDevice(pInterrupt, 32000, pConfig->GetChunkSize());
+        new CHDMISoundBaseDevice(pInterrupt, pConfig->GetSampleRate(), pConfig->GetChunkSize());
 
     // The channels are swapped by default in the HDMI sound driver.
     // TODO: Remove this line, when this has been fixed in the driver.
@@ -120,7 +116,7 @@ CMiniJV880::CMiniJV880(CConfig *pConfig, CInterruptSystem *pInterrupt,
     LOGNOTE("PWM mode");
 
     m_pSoundDevice =
-        new CPWMSoundBaseDevice(pInterrupt, 32000, pConfig->GetChunkSize());
+        new CPWMSoundBaseDevice(pInterrupt, pConfig->GetSampleRate(), pConfig->GetChunkSize());
   }
   
 };
@@ -149,15 +145,15 @@ bool CMiniJV880::Initialize(void) {
 	// Ensure CR->CRLF translation is disabled for MIDI links
 	ser_options &= ~(SERIAL_OPTION_ONLCR);
 	m_Serial.SetOptions(ser_options);
-  LOGNOTE("Serial MIDI Initialized");
+   LOGNOTE("Serial MIDI Initialized");
     midiParser.Init(this);
 
     
-  
+
     if (!LoadMainRoms(m_pConfig->GetExpRom())) {
         return false;
     }
-    
+    LOGNOTE("waverom_exp addr: %p, rom.data addr: %p, size: %zu", mcu.pcm.waverom_exp, m_romInfos[m_pConfig->GetExpRom() + 6].data, EXP_SIZE);
     int ret = 0;
 
     uint8_t* nvram = (uint8_t*)m_romInfos[0].data;  // jv880_nvram.bin
@@ -205,7 +201,13 @@ void CMiniJV880::Process(bool bPlugAndPlayUpdated) {
 
   m_UI.Process ();
 
-  int nRead = m_Serial.Read(m_MIDIBuffer, sizeof(m_MIDIBuffer));
+    int pendingBank = m_nPendingBankSwitch.exchange(-1, std::memory_order_acquire);
+    if (pendingBank >= 0) {
+        LOGNOTE("Executing bank switch to %d", pendingBank);
+        switchPatchBank(pendingBank);
+    }
+
+    int nRead = m_Serial.Read(m_MIDIBuffer, sizeof(m_MIDIBuffer));
     if (nRead > 0) {
         midiParser.FeedSerialBytes(m_MIDIBuffer, nRead);  // <<<<< ТУТ
     }
@@ -227,39 +229,6 @@ void CMiniJV880::USBMIDIMessageHandler(unsigned nCable, u8 *pPacket,
                                        unsigned nLength) {
   if (!pPacket || nLength == 0) return;
   s_pThis->midiParser.FeedUSBMIDIPacket(pPacket, nLength);
-}
-
-// Schedule bank switch with 2-second delay to handle multiple rapid changes
-void CMiniJV880::ScheduleBankSwitch(int bankNumber) {
-    m_nTargetBank = bankNumber;
-    m_bNeedBankSwitch = true;
-    
-    // Cancel previous timer if it was set
-    if (m_nBankSwitchTimer != 0) {
-        m_pTimer->CancelKernelTimer(m_nBankSwitchTimer);
-        m_nBankSwitchTimer = 0;
-    }
-    
-    // Set timer for 2 seconds to switch bank (to handle rapid encoder changes)
-    // Convert 2 seconds to ticks (2000ms * HZ / 1000 = 2 * HZ ticks)
-    unsigned nDelay = 2 * HZ; // 2 seconds in ticks (HZ = 100 ticks per second)
-    m_nBankSwitchTimer = m_pTimer->StartKernelTimer(nDelay, BankSwitchTimerHandler, this, nullptr);
-}
-
-// Timer handler to perform actual bank switch
-void CMiniJV880::BankSwitchTimerHandler(TKernelTimerHandle hTimer, void *pParam, void *pContext) {
-    CMiniJV880 *pThis = static_cast<CMiniJV880*>(pParam);
-    
-    if (pThis->m_bNeedBankSwitch) {
-        pThis->m_bNeedBankSwitch = false;
-        pThis->m_nBankSwitchTimer = 0; // Clear timer handle
-        
-        // Perform bank switch
-        //pThis->m_CMiniJV880.switchPatchBank(pThis->m_nTargetBank);
-
-        LOGNOTE("Bank false switched to %d", pThis->m_nTargetBank);
-        // pThis->mcu.SC55_Reset();
-    }
 }
 
 void CMiniJV880::HandleFullMIDIMessage(const uint8_t* pData, uint8_t nLength)
@@ -292,7 +261,9 @@ void CMiniJV880::HandleFullMIDIMessage(const uint8_t* pData, uint8_t nLength)
 
     // ===== Priority 4: Bank Switch (CC 32) =====
     if ((status & 0xF0) == 0xB0 && nLength == 3 && pData[1] == 32) {
-        //ScheduleBankSwitch(pData[2]);
+    // Убираем комментарий, добавляем проверку канала если нужно
+      m_nPendingBankSwitch.store(pData[2] & 0x7F, std::memory_order_release);
+    
     }
 
     // ===== Priority 5: NVRAM Save Trigger =====
@@ -350,13 +321,16 @@ void CMiniJV880::HandleFullMIDIMessage(const uint8_t* pData, uint8_t nLength)
         }
     }
     // add checksum for Roland sysex messages 
-    if (status == 0xF0 && nLength > 6 && pData[nLength - 1] == 0xF7) {
-        if (pData[1] == 0x41) {
+    if (pData[0] == 0xF0 && nLength > 7 && pData[nLength-1] == 0xF7) {
+        if (pData[1] == 0x41) { // Roland
             int chk_idx = nLength - 2;
-            if (chk_idx < 5) return;
+            if (chk_idx < 6) return; // нужно минимум 5 байт до chk
 
+            // Sum last 5 bytes before checksum
             int sum = 0;
-            for (int i = 2; i < chk_idx; i++) sum += pData[i];
+            for (int i = 0; i < 5; i++) {
+                sum += pData[chk_idx - 5 + i];
+            }
             sum &= 0x7F;
             uint8_t checksum = (128 - sum) & 0x7F;
 
@@ -364,13 +338,13 @@ void CMiniJV880::HandleFullMIDIMessage(const uint8_t* pData, uint8_t nLength)
             memcpy(out, pData, nLength);
             out[chk_idx] = checksum;
 
-            // Log full outgoing SysEx in HEX
-            char buf[512];
+            // Log
+            char buf[256];
             int len = 0;
-            for (int i = 0; i < nLength && len < sizeof(buf) - 4; i++) {
+            for (int i = 0; i < nLength && len < 250; i++) {
                 len += snprintf(buf + len, sizeof(buf) - len, "%02X ", out[i]);
             }
-            if (len > 0) buf[len - 1] = 0; // remove trailing space
+            if (len) buf[len-1] = 0;
             LOGNOTE(buf);
 
             mcu.postMidiSC55(out, nLength);
@@ -449,6 +423,10 @@ void CMiniJV880::Run(unsigned nCore) {
         const int MCU_INSTR_BURST = 64;
         //unsigned log_counter = 0;
         while (true) {
+            if (m_bAudioPaused.load(std::memory_order_acquire)) {
+                CTimer::SimpleMsDelay(1);
+                continue;
+            }
             unsigned nFrames = m_nQueueSizeFrames - m_pSoundDevice->GetQueueFramesAvail();
             if (nFrames < m_nQueueSizeFrames / 2) {
                 CTimer::SimpleMsDelay(1);
@@ -523,6 +501,10 @@ void CMiniJV880::Run(unsigned nCore) {
         //uint64_t cycles_acc_fp = 0; // optional accumulator if needed by PCM internals
 
         while (true) {
+            if (m_bAudioPaused.load(std::memory_order_acquire)) {
+                CTimer::SimpleMsDelay(1);
+                continue;
+            }
             uint64_t cycles_target = __atomic_load_n(&mcu.mcu.cycles, __ATOMIC_ACQUIRE);
             if (cycles_target <= last_generated_cycles) {
                 CTimer::SimpleMsDelay(0);
@@ -535,9 +517,8 @@ void CMiniJV880::Run(unsigned nCore) {
                 uint32_t gen = (uint32_t) (samples_to_gen > MAX_SAMPLES_PER_ITER ? MAX_SAMPLES_PER_ITER : samples_to_gen);
                 uint64_t pcm_target = last_generated_cycles + gen * CYCLES_PER_SAMPLE;
 
-                // PCM_Update must advance internal pcm.cycles up to pcm_target and call MCU_PostSample for samples
                 mcu.pcm.PCM_Update(pcm_target);
-
+                    
                 last_generated_cycles = pcm_target;
                 samples_to_gen -= gen;
 
@@ -693,6 +674,34 @@ void CMiniJV880::UnscrambleRom(const uint8_t *src, uint8_t *dst, int len) {
     }
 }
 
+void CMiniJV880::switchPatchBank(int bankNumber) {
+    LOGNOTE("Switching to bank %d", bankNumber);
+
+    if (bankNumber < 0 || bankNumber > 19) {
+        LOGERR("Invalid bank number");
+        return;
+    }
+
+    int romIndex = (bankNumber == 0) ? 6 : 6 + bankNumber;
+    RomInfo& rom = m_romInfos[romIndex];
+    
+
+    if (!rom.isLoaded && !LoadRom(romIndex)) {
+        LOGERR("Failed to load ROM: %s", rom.filename);
+        return;
+    }
+   
+    m_bAudioPaused.store(true, std::memory_order_release);
+    CTimer::SimpleMsDelay(5);
+    LOGNOTE("BEFORE memcpy: waverom_exp=%p, rom.data=%p, size=%zu", mcu.pcm.waverom_exp, rom.data, EXP_SIZE);
+    LOGNOTE("waverom_exp first 32 bytes:", mcu.pcm.waverom_exp, 32);
+    LOGNOTE("rom.data first 32 bytes:", rom.data, 32);
+    memcpy(mcu.pcm.waverom_exp, rom.data, EXP_SIZE);
+    LOGNOTE("waverom_exp AFTER copy first 32 bytes:", mcu.pcm.waverom_exp, 32);
+    //mcu.SC55_Reset();
+    m_bAudioPaused.store(false, std::memory_order_release);
+    LOGNOTE("Bank switched to %d: %s", bankNumber, rom.filename);
+}
 
 // additional temporary functions 
 void CMiniJV880::LogPCM(uint64_t logcyc1) {

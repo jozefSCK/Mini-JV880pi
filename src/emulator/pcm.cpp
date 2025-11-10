@@ -1484,6 +1484,7 @@ void Pcm::PCM_Update(uint64_t cycles_target)
                 int outL = (int)((pcm.ram1[30][2] & ~WRITE_MASK) << 12);
                 int outR = (int)((pcm.ram1[30][4] & ~WRITE_MASK) << 12);
                 int tt[2] = { outL, outR };
+
                 mcu->MCU_PostSample(tt);
 
                 // second half-step LFSR
@@ -1495,6 +1496,17 @@ void Pcm::PCM_Update(uint64_t cycles_target)
 
                 pcm.ram1[30][3] = addclip20(pcm.accum_l, (orval | (shifter & noise_mask)), 0);
                 pcm.ram1[30][5] = addclip20(pcm.accum_r, (orval | (shifter & noise_mask)), 0);
+
+                pcm.ram2[30][10] = shifter;
+
+                pcm.ram1[30][0] = pcm.accum_l & WRITE_MASK;
+                pcm.ram1[30][1] = pcm.accum_r & WRITE_MASK;
+
+
+                tt[0] = (int)((pcm.ram1[30][3] & ~WRITE_MASK) << 12);
+                tt[1] = (int)((pcm.ram1[30][5] & ~WRITE_MASK) << 12);
+
+                mcu->MCU_PostSample(tt);
             }
 
             // ---- global count ADSR/TV

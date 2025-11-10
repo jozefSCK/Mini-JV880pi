@@ -10,7 +10,6 @@ fi
 
 tar xf gcc-arm-10.3-2021.07-x86_64-aarch64-none-elf.tar.xz
 
-COMPILER_DIR=$(readlink -f ./gcc-arm-10.3-2021.07-x86_64-aarch64-none-elf)
-export PATH="${COMPILER_DIR}/bin:${PATH}"
+export PATH=$(readlink -f ./gcc-*aarch64-none*/bin/):$PATH
 
-RPI=3 bash build.sh
+RPI=3 bash -ex build.sh

@@ -38,6 +38,7 @@ void CConfig::Load (void)
 	m_nMCUcycles = m_Properties.GetNumber ("MCUcycles", 11);
 	m_nExpRom = m_Properties.GetNumber ("ExpRom", 0);
 	m_SoundDevice = m_Properties.GetString ("SoundDevice", "pwm");
+	m_nSampleRate = m_Properties.GetNumber ("SampleRate", 64000);
 
 	if (m_SoundDevice == "hdmi") {
 		m_nChunkSize = m_Properties.GetNumber ("ChunkSize", 384*6);
@@ -166,6 +167,11 @@ unsigned CConfig::GetExpRom (void) const
 const char *CConfig::GetSoundDevice (void) const
 {
 	return m_SoundDevice.c_str ();
+}
+
+unsigned CConfig::GetSampleRate (void) const
+{
+	return m_nSampleRate;
 }
 
 unsigned CConfig::GetChunkSize (void) const

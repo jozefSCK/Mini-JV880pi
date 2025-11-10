@@ -778,6 +778,12 @@ int MCU::startSC55(const uint8_t *s_rom1, const uint8_t *s_rom2,
   if (s_waverom_exp != nullptr) {
   memcpy(pcm.waverom_exp, s_waverom_exp, EXP_SIZE);
   }
+    LOGNOTE("=== NVRAM addr: %p (size 0x8000)", nvram);
+    LOGNOTE("=== ROM1 addr: %p (size 0x%x)", rom1, ROM1_SIZE);
+    LOGNOTE("=== ROM2 addr: %p (size 0x%x)", rom2, ROM2_SIZE);
+    LOGNOTE("=== waverom1 addr: %p (size 0x200000)", pcm.waverom1);
+    LOGNOTE("=== waverom2 addr: %p (size 0x200000)", pcm.waverom2);
+    LOGNOTE("=== waverom_exp addr: %p (size 0x800000)", pcm.waverom_exp);
   SC55_Reset();
 
   return 0;
