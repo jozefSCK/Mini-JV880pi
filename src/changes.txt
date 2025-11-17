@@ -1,9 +1,16 @@
 1.1.0
 Fixed buttons send to SC55
+Turned on internal resampler to 64 khz
+Sound driver switched to 64 khz
 Added Up and Down buttons if no encoder (check .ini)
 Added synchronized MIDI parser
-Added checksum calculate in sysex messages
 Added Expanded ROM load at start (check .ini)
 Changed .bin loader
 Added save NVRAM via MIDI command (check .ini)
 Added checksum to Roland sysex messages sended to JV880
+
+ToDo:
+
+Abandon Nuked SC55 emulation and create native C++ code. (This will be very difficult and requires specialist assistance.)
+Abandon the MINIDEXED platform, which is very complex and confusing, and move to the MULTISYNTH platform, which MT32pi is well suited for.
+Develop a MULTISYNTH API.

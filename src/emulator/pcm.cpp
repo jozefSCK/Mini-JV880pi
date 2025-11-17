@@ -1506,7 +1506,7 @@ void Pcm::PCM_Update(uint64_t cycles_target)
                 tt[0] = (int)((pcm.ram1[30][3] & ~WRITE_MASK) << 12);
                 tt[1] = (int)((pcm.ram1[30][5] & ~WRITE_MASK) << 12);
 
-                mcu->MCU_PostSample(tt);
+                mcu->MCU_PostSample(tt); // resample to 64000
             }
 
             // ---- global count ADSR/TV
