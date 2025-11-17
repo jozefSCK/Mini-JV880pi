@@ -1,7 +1,7 @@
 #ifndef VERSION_H
 #define VERSION_H
 
-#define VERSION_STRING "v1.1.0-4-g0ef6ca9-dirty"
+#define VERSION_STRING "v1.1.0-6-g566068f-dirty"
 #define VERSION_SHORT "v1.1.0"  
 #define VERSION_IS_DIRTY "" == "dirty" || echo "clean"
 

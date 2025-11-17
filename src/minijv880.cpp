@@ -147,13 +147,13 @@ bool CMiniJV880::Initialize(void) {
 	m_Serial.SetOptions(ser_options);
    LOGNOTE("Serial MIDI Initialized");
     midiParser.Init(this);
-
-    
+    memset(mcu.lcd.LCD_Data, 0x20, sizeof(mcu.lcd.LCD_Data));
+    mcu.mcu.pc=0; //mcu not running   
 
     if (!LoadMainRoms(m_pConfig->GetExpRom())) {
         return false;
     }
-    LOGNOTE("waverom_exp addr: %p, rom.data addr: %p, size: %zu", mcu.pcm.waverom_exp, m_romInfos[m_pConfig->GetExpRom() + 6].data, EXP_SIZE);
+    //LOGNOTE("waverom_exp addr: %p, rom.data addr: %p, size: %zu", mcu.pcm.waverom_exp, m_romInfos[m_pConfig->GetExpRom() + 6].data, EXP_SIZE);
     int ret = 0;
 
     uint8_t* nvram = (uint8_t*)m_romInfos[0].data;  // jv880_nvram.bin
@@ -568,6 +568,8 @@ bool CMiniJV880::LoadRom(uint8_t rom_index) {
 
     RomInfo& rom = m_romInfos[rom_index];
     std::string fullPath = "roms/";
+    m_UI.LCDMessage("Loading file\n%s", rom.filename);
+    CTimer::SimpleMsDelay(100);
     fullPath += rom.filename;
 
     // Check if file exists

@@ -44,8 +44,9 @@ public:
 
 	void Process (void);
 	bool LCDInit(void);
-	void LCDWrite (const char *pString);		// Print to optional HD44780 display
+	void LCDWrite (const char *pString);		
 	void TriggerUIButtonEvent(CUIButton::BtnEvent event);
+	void LCDMessage(const char* fmt, ...);
 	
 	// MIDI button mappings - cached from config
     unsigned m_nMIDIButtonChannel;
@@ -102,9 +103,15 @@ private:
 	bool isPaused[2] = {true, true};  // Start paused
 	bool isAtEnd[2] = {false, false};
 	unsigned long pauseStartTime[2] = {0, 0};
+	
 	static const unsigned long SCROLL_INTERVAL = 1000000;
 	static const unsigned long PAUSE_DURATION = 1500000;
 	static const int ACTUAL_COLS = 24;
+    
+	char m_messageText[256];
+    unsigned long m_messageShowTime = 0;
+    int m_messageDuration = 3000000; // 2 second
+    bool m_showingMessage = false;
 
 	
 };
