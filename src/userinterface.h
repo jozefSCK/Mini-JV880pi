@@ -20,6 +20,9 @@
 #ifndef _userinterface_h
 #define _userinterface_h
 
+#define MAX_MESSAGE_QUEUE 4
+#define MAX_MESSAGE_LEN 256
+
 #include "config.h"
 #include "uibuttons.h"
 #include <sensor/ky040.h>
@@ -47,6 +50,7 @@ public:
 	void LCDWrite (const char *pString);		
 	void TriggerUIButtonEvent(CUIButton::BtnEvent event);
 	void LCDMessage(const char* fmt, ...);
+	void RenderDisplay(void);
 	
 	// MIDI button mappings - cached from config
     unsigned m_nMIDIButtonChannel;
@@ -108,11 +112,10 @@ private:
 	static const unsigned long PAUSE_DURATION = 1500000;
 	static const int ACTUAL_COLS = 24;
     
-	char m_messageText[256];
-    unsigned long m_messageShowTime = 0;
-    int m_messageDuration = 3000000; // 2 second
-    bool m_showingMessage = false;
-
+     char  m_msg[256];
+    unsigned long m_msgTime = 0;
+    const unsigned m_msgDur = 3000000;   // 3 s
+    bool  m_inProc = false;
 	
 };
 

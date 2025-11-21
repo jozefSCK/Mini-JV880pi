@@ -143,223 +143,17 @@ bool CUserInterface::Initialize (void)
 	return true;
 }
 
-void CUserInterface::Process (void)
+void CUserInterface::Process(void)
 {
-	m_pMiniJV880->mcu.lcd.LCD_Update();
+    // ← m_inProc не нужен
 
-	if (m_pLCDBuffered)
-	{
-		m_pLCDBuffered->Update ();
-	}
-	if (m_pUIButtons)
-	{
-		m_pUIButtons->Update();
-	}
+    m_pMiniJV880->mcu.lcd.LCD_Update();
+    if (m_pUIButtons) m_pUIButtons->Update();
 
-	
-     static int unifiedScrollPos = 0;
-    static int unifiedScrollDir = 1;
-    static unsigned long m_lastScrollTime = 0;
-    
-    int displayCols = m_pConfig->GetLCDColumns();
-    int displayRows = m_pConfig->GetLCDRows();
-    unsigned long currentTime = CTimer::GetClockTicks();
+    RenderDisplay();  // ← отрисовка
 
-    // ===== SERVICE MESSAGE DISPLAY =====
-    if (m_showingMessage && m_messageText[0]) {
+    if (m_pLCDBuffered) m_pLCDBuffered->Update();
 
-        unsigned long timeDiff = currentTime - m_messageShowTime;
-        bool shouldShow = timeDiff < (unsigned long)m_messageDuration;
-        
-        LOGNOTE("Message check: '%s', showing=%d, timeDiff=%lu, shouldShow=%d", 
-
-			m_messageText, m_showingMessage, timeDiff, shouldShow);
-        if ((currentTime - m_messageShowTime) < (unsigned long)m_messageDuration ) {
-            CString Msg("\x1B[H\x1B[?25l");
-            
-            if (displayRows <= 2) {
-                // Full screen message for 2-line displays
-                Msg += "\x1B[2J";
-                const char* p = m_messageText;
-                for (int row = 0; row < displayRows && *p; row++) {
-                    for (int col = 0; col < displayCols && *p; col++) {
-                        if (*p == '\n') { p++; break; }
-                        Msg += (*p >= 32 && *p <= 126) ? *p++ : ' ';
-                    }
-                    while (*p && *p != '\n') p++;
-                    if (*p == '\n') p++;
-                    
-                    while ((int)Msg.GetLength() < (row + 1) * displayCols + 7) {
-                        Msg += ' ';
-                    }
-                }
-            } else {
-				// Message in bottom 2 lines for 4+ line displays
-				int firstMsgRow = displayRows - 2;
-				
-				// Clear entire screen
-				Msg += "\x1B[2J";
-				
-				if (m_pMiniJV880->mcu.mcu.pc != 0) {
-					// MCU ready - draw emulator content in upper lines
-					for (int row = 0; row < firstMsgRow && row < 8; row++) {
-						int rowLen = 0;
-						for (int c = ACTUAL_COLS - 1; c >= 0; c--) {
-							if (m_pMiniJV880->mcu.lcd.LCD_Data[row * 40 + c] != ' ') {
-								rowLen = c + 1; break;
-							}
-						}
-						
-						if (rowLen == 0) {
-							for (int col = 0; col < displayCols; col++) Msg += ' ';
-							continue;
-						}
-						
-						int cursorRow = m_pMiniJV880->mcu.lcd.LCD_DD_RAM / 0x40;
-						int cursorCol = m_pMiniJV880->mcu.lcd.LCD_DD_RAM % 0x40;
-						bool cursorEnabled = m_pMiniJV880->mcu.lcd.LCD_C != 0;
-						if (cursorRow >= displayRows) cursorRow = 0;
-						
-						for (int col = 0; col < displayCols; col++) {
-							int sourcePos = col + unifiedScrollPos;
-							uint8_t ch = (sourcePos < ACTUAL_COLS) ? m_pMiniJV880->mcu.lcd.LCD_Data[row * 40 + sourcePos] : ' ';
-							if (ch == 0x09) ch = 0x7C;
-							else if (ch < 32 || ch > 126) ch = ' ';
-							
-							if (cursorEnabled && row == cursorRow && sourcePos == cursorCol) {
-								Msg += '_';
-							} else {
-								Msg += (char)ch;
-							}
-						}
-					}
-						} else {
-							// MCU not ready - show placeholder in upper 2 lines
-							Msg += "\x1B[1;1H";  // Move to row 1, column 1
-							Msg += "Start MiniJV880pi";
-
-							Msg += "\x1B[2;1H";  // Move to row 2, column 1  
-							Msg += "version ";
-							Msg += VERSION_SHORT;
-							
-							// Fill remaining spaces in first 2 rows
-							for (int row = 0; row < firstMsgRow; row++) {
-								while ((int)Msg.GetLength() < (row + 1) * displayCols + 7) {
-									Msg += ' ';
-								}
-							}
-						}
-						
-						// Draw message in bottom 2 lines
-						const char* p = m_messageText;
-						
-						// First message line (row 3)
-						Msg += "\x1B[3;1H";
-						const char* line1_end = p;
-						while (*line1_end && *line1_end != '\n') line1_end++;
-						for (const char* src = p; src < line1_end && (src - p) < displayCols; src++) {
-							Msg += (*src >= 32 && *src <= 126) ? *src : ' ';
-						}
-						for (int col = (line1_end - p); col < displayCols; col++) {
-							Msg += ' ';
-						}
-						
-						// Second message line (row 4)
-						Msg += "\x1B[4;1H";
-						p = line1_end;
-						if (*p == '\n') p++;
-						const char* line2_end = p;
-						while (*line2_end && *line2_end != '\n') line2_end++;
-						for (const char* src = p; src < line2_end && (src - p) < displayCols; src++) {
-							Msg += (*src >= 32 && *src <= 126) ? *src : ' ';
-						}
-						for (int col = (line2_end - p); col < displayCols; col++) {
-							Msg += ' ';
-						}
-					}
-            
-            LCDWrite(Msg);
-        } else {
-            // Message duration expired - hide it
-            m_showingMessage = false;
-            m_messageText[0] = 0;
-			CString ClearMsg("\x1B[2J\x1B[H\x1B[?25l"); // Clear screen + home cursor
-    
-			// Fill entire screen with spaces
-			for (int row = 0; row < displayRows; row++) {
-				for (int col = 0; col < displayCols; col++) {
-					ClearMsg += ' ';
-				}
-			}
-			LCDWrite(ClearMsg);
-        }
-        return; // Important: return after showing message
-    }
-
-    // ===== NORMAL RENDERING =====
-    CString Msg("\x1B[H\x1B[?25l");
-    
-    int rowLen[8] = {0};
-    int maxRowLen = 0;
-    for (int r = 0; r < displayRows && r < 8; r++) {
-        rowLen[r] = 0;
-        for (int c = ACTUAL_COLS - 1; c >= 0; c--) {
-            if (m_pMiniJV880->mcu.lcd.LCD_Data[r * 40 + c] != ' ') {
-                rowLen[r] = c + 1;
-                break;
-            }
-        }
-        if (rowLen[r] > maxRowLen) {
-            maxRowLen = rowLen[r];
-        }
-    }
-
-    if (maxRowLen > displayCols) {
-        if (currentTime - m_lastScrollTime >= SCROLL_INTERVAL) {
-            unifiedScrollPos += unifiedScrollDir;
-            if (unifiedScrollPos <= 0) {
-                unifiedScrollPos = 0;
-                unifiedScrollDir = +1;
-            } else if (unifiedScrollPos >= maxRowLen - displayCols) {
-                unifiedScrollPos = maxRowLen - displayCols;
-                unifiedScrollDir = -1;
-            }
-        }
-    } else {
-        unifiedScrollPos = 0;
-    }
-    if (currentTime - m_lastScrollTime >= SCROLL_INTERVAL) m_lastScrollTime = currentTime;
-
-    for (int row = 0; row < displayRows && row < 8; row++) {
-        int startPos = unifiedScrollPos;
-
-        if (rowLen[row] == 0) continue;
-        
-        int cursorRow = m_pMiniJV880->mcu.lcd.LCD_DD_RAM / 0x40;
-        int cursorCol = m_pMiniJV880->mcu.lcd.LCD_DD_RAM % 0x40;
-        bool cursorEnabled = m_pMiniJV880->mcu.lcd.LCD_C != 0;
-
-        if (cursorRow >= displayRows) {
-            cursorRow = 0;
-        }
-
-        for (int col = 0; col < displayCols; col++) {
-            int sourcePos = col + startPos;
-            uint8_t ch = (sourcePos < ACTUAL_COLS) ? m_pMiniJV880->mcu.lcd.LCD_Data[row * 40 + sourcePos] : ' ';
-
-            if (ch == 0x09) ch = 0x7C;
-            else if (ch < 32 || ch > 126) ch = ' ';
-
-            if (cursorEnabled && row == cursorRow && sourcePos == cursorCol) {
-                Msg += "_";
-            } else {
-                char buf[2] = { (char)ch, 0 };
-                Msg += buf;
-            }
-        }
-    }
-
-    LCDWrite(Msg);
 
 
 /*
@@ -756,19 +550,124 @@ void CUserInterface::TriggerUIButtonEvent(CUIButton::BtnEvent event)
     }
 }
 
-void CUserInterface::LCDMessage(const char* fmt, ...) {
-    va_list args;
-    va_start(args, fmt);
-    vsnprintf(m_messageText, sizeof(m_messageText), fmt, args);
-    va_end(args);
-    LOGNOTE("LCDMessage SET: '%s'", m_messageText);
-    
-    // Start showing message with 1 second duration
-    m_messageShowTime = CTimer::GetClockTicks();
-    m_showingMessage = true;
+void CUserInterface::LCDMessage(const char* fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(m_msg, sizeof(m_msg), fmt, ap);
+    va_end(ap);
+    m_msgTime = CTimer::GetClockTicks();
+	RenderDisplay();
+	if (m_pLCDBuffered) m_pLCDBuffered->Update();
 
-	LOGNOTE("LCDMessage: startTime=%lu", m_messageShowTime);
-    
-    // Force immediate display update
-    this->Process();
+}
+
+void CUserInterface::RenderDisplay(void)
+{
+    const int cols = m_pConfig->GetLCDColumns();
+    const int rows = m_pConfig->GetLCDRows();
+    const unsigned long now = CTimer::GetClockTicks();
+
+    CString out("\x1B[H\x1B[?25l");
+
+    // emulator content
+    if (m_pMiniJV880->mcu.mcu.pc != 0) {
+        // ← рисуем эмулятор, как раньше
+        int rowLen[8] = {0};
+        int maxLen = 0;
+        for (int r = 0; r < rows && r < 8; ++r) {
+            for (int c = ACTUAL_COLS - 1; c >= 0; --c)
+                if (m_pMiniJV880->mcu.lcd.LCD_Data[r * 40 + c] != ' ') {
+                    rowLen[r] = c + 1;
+                    break;
+                }
+            if (rowLen[r] > maxLen) maxLen = rowLen[r];
+        }
+
+        // ← прокрутка, если нужно
+        static int scrollPos = 0, scrollDir = 1;
+        static unsigned long lastScroll = 0;
+        if (maxLen > cols) {
+            if (now - lastScroll >= SCROLL_INTERVAL) {
+                scrollPos += scrollDir;
+                if (scrollPos <= 0) { scrollPos = 0; scrollDir = 1; }
+                else if (scrollPos >= maxLen - cols) {
+                    scrollPos = maxLen - cols;
+                    scrollDir = -1;
+                }
+                lastScroll = now;
+            }
+        } else scrollPos = 0;
+
+        for (int row = 0; row < rows && row < 8; ++row) {
+            const int start = scrollPos;
+            if (rowLen[row] == 0) {
+                for (int i = 0; i < cols; ++i) out += ' ';
+                continue;
+            }
+            const int csrRow = m_pMiniJV880->mcu.lcd.LCD_DD_RAM / 0x40;
+            const int csrCol = m_pMiniJV880->mcu.lcd.LCD_DD_RAM % 0x40;
+            const bool csrOn = m_pMiniJV880->mcu.lcd.LCD_C != 0;
+            if (csrRow >= rows) continue;
+
+            for (int col = 0; col < cols; ++col) {
+                int src = col + start;
+                uint8_t ch = (src < ACTUAL_COLS) ?
+                    m_pMiniJV880->mcu.lcd.LCD_Data[row * 40 + src] : ' ';
+                if (ch == 0x09) ch = 0x7C;
+                else if (ch < 32 || ch > 126) ch = ' ';
+                out += (csrOn && row == csrRow && src == csrCol) ? '_' : (char)ch;
+            }
+        }
+    } else {
+        // ← placeholder
+        out += "\x1B[1;1H";
+        out += "Start MiniJV880";
+        out += "\x1B[2;1H";
+        out += "version ";
+        out += VERSION_SHORT;
+        // ← заполнить пробелами
+        for (int row = 0; row < 2; ++row) {
+            while ((int)out.GetLength() < (row + 1) * cols + 7) out += ' ';
+        }
+    }
+
+    // message overlay
+    const unsigned long dt = now - m_msgTime;
+    if (m_msg[0] && dt < m_msgDur) {
+        if (rows <= 2) {
+            out = "\x1B[H\x1B[?25l\x1B[2J";
+            const char* p = m_msg;
+            for (int row = 0; row < rows && *p; ++row) {
+                for (int col = 0; col < cols && *p; ++col) {
+                    if (*p == '\n') { ++p; break; }
+                    out += (*p >= 32 && *p <= 126) ? *p++ : ' ';
+                }
+                while (*p && *p != '\n') ++p;
+                if (*p == '\n') ++p;
+                while ((int)out.GetLength() < (row + 1) * cols + 7) out += ' ';
+            }
+        } else {
+            const char* p = m_msg;
+            out += "\x1B[3;1H";
+            const char* e1 = p;
+            while (*e1 && *e1 != '\n') ++e1;
+            for (const char* s = p; s < e1 && (s - p) < cols; ++s)
+                out += (*s >= 32 && *s <= 126) ? *s : ' ';
+            for (int i = 0; i < cols - (e1 - p); ++i) out += ' ';
+
+            out += "\x1B[4;1H";
+            p = e1;
+            if (*p == '\n') ++p;
+            const char* e2 = p;
+            while (*e2 && *e2 != '\n') ++e2;
+            for (const char* s = p; s < e2 && (s - p) < cols; ++s)
+                out += (*s >= 32 && *s <= 126) ? *s : ' ';
+            for (int i = 0; i < cols - (e2 - p); ++i) out += ' ';
+        }
+    } else {
+        m_msg[0] = 0;   // expired
+    }
+
+    LCDWrite(out);
 }

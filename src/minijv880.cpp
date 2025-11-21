@@ -569,7 +569,7 @@ bool CMiniJV880::LoadRom(uint8_t rom_index) {
     RomInfo& rom = m_romInfos[rom_index];
     std::string fullPath = "roms/";
     m_UI.LCDMessage("Loading file\n%s", rom.filename);
-    CTimer::SimpleMsDelay(100);
+    CTimer::SimpleMsDelay(300);
     fullPath += rom.filename;
 
     // Check if file exists
