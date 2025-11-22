@@ -26,3 +26,4 @@ Added MIDI CC instructions for no physical button hardware (see minijv880.ini fi
 Fixed MCU synchronization in PCM in individual cores using a ring buffer. 
     No clicking or grinding sounds. Synchronization does not get lost even after long-term use.
 Returned the screen scroll mode back. It still needs to be sorted out.
+Add versioning system
