@@ -14,3 +14,15 @@ ToDo:
 Abandon Nuked SC55 emulation and create native C++ code. (This will be very difficult and requires specialist assistance.)
 Abandon the MINIDEXED platform, which is very complex and confusing, and move to the MULTISYNTH platform, which MT32pi is well suited for.
 Develop a MULTISYNTH API.
+
+1.0.6
+
+Update experimental full display view 24x2 on graphical OLED displays SSD1305/SSD1306 with small fonts 5x8. 
+Read Wiki and minijv880.ini
+
+1.0.5
+
+Added MIDI CC instructions for no physical button hardware (see minijv880.ini file)
+Fixed MCU synchronization in PCM in individual cores using a ring buffer. 
+    No clicking or grinding sounds. Synchronization does not get lost even after long-term use.
+Returned the screen scroll mode back. It still needs to be sorted out.
