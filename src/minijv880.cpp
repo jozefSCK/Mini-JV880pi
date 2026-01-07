@@ -380,6 +380,8 @@ void CMiniJV880::SaveNVRAMIncremental() {
             f_close(&file);
         }
     } while (res == FR_OK); // Continue while we find existing files
+
+    m_UI.LCDMessage("Saving NVRAM file\njv880_nvram%d.bin", m_nNVRAMSaveCounter);
     
     // Now filename contains a non-existing filename
     // Open for writing
@@ -397,6 +399,7 @@ void CMiniJV880::SaveNVRAMIncremental() {
     // Check if write was successful
     if (res == FR_OK && bytesWritten == 0x8000) {
         LOGNOTE("NVRAM saved to %s", filename);
+        m_UI.LCDMessage("Saved NVRAM file\njv880_nvram%d.bin", m_nNVRAMSaveCounter);
     } else {
         LOGERR("Failed to save NVRAM to %s, written: %d bytes, error: %d", 
                filename, bytesWritten, res);
@@ -568,8 +571,7 @@ bool CMiniJV880::LoadRom(uint8_t rom_index) {
 
     RomInfo& rom = m_romInfos[rom_index];
     std::string fullPath = "roms/";
-    m_UI.LCDMessage("Loading file\n%s", rom.filename);
-    CTimer::SimpleMsDelay(300);
+
     fullPath += rom.filename;
 
     // Check if file exists
@@ -600,6 +602,7 @@ bool CMiniJV880::LoadRom(uint8_t rom_index) {
     }
     
     //LOGNOTE("Loaded %s successfully", fullPath.c_str());
+
     
     // Check if descrambling is needed
     if (rom.needsUnscramble) {
@@ -618,6 +621,10 @@ bool CMiniJV880::LoadRom(uint8_t rom_index) {
     }
     
     // Mark as loaded
+    LOGNOTE("Loading file\n%s", rom.filename);
+    m_UI.LCDMessage("Loading file\n%s", rom.filename);
+    m_UI.RenderDisplay();
+    CTimer::SimpleMsDelay(300);
     rom.isLoaded = true;
     return true;
 }

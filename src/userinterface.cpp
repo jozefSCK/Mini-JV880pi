@@ -31,12 +31,9 @@
 
 LOGMODULE ("ui");
 
-void set_pixel(unsigned char *screen, int x, int y, bool value) {
-  if (!value)
-    screen[(y / 8) * 128 + x] |= 1 << (y % 8);
-  else
-    screen[(y / 8) * 128 + x] &= ~(1 << (y % 8));
-}
+bool CUserInterface::g_ServiceActive = false;
+unsigned long CUserInterface::g_ServiceStart = 0;
+CString CUserInterface::g_ServiceLine[2];
 
 CUserInterface::CUserInterface (CMiniJV880 *pMiniJV880, CGPIOManager *pGPIOManager, CI2CMaster *pI2CMaster, CSPIMaster *pSPIMaster, CConfig *pConfig)
 :	m_pMiniJV880 (pMiniJV880),
@@ -372,7 +369,7 @@ bool CUserInterface::LCDInit()
 			return false;
 		}
 
-		m_pLCDBuffered = new CWriteBufferDevice (m_pLCD);
+		m_pLCDBuffered = new CWriteBufferDevice (m_pLCD, 256);
 		assert (m_pLCDBuffered);
 
 		LCDWrite ("\x1B[?25l\x1B""d+");		// cursor off, autopage mode
@@ -552,30 +549,56 @@ void CUserInterface::TriggerUIButtonEvent(CUIButton::BtnEvent event)
 
 void CUserInterface::LCDMessage(const char* fmt, ...)
 {
-    va_list ap;
-    va_start(ap, fmt);
-    vsnprintf(m_msg, sizeof(m_msg), fmt, ap);
-    va_end(ap);
-    m_msgTime = CTimer::GetClockTicks();
-	RenderDisplay();
-	if (m_pLCDBuffered) m_pLCDBuffered->Update();
+    char buf[128]; // форматируемая строка
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
 
+    // Разделяем по переносу строки
+    char* nl = strchr(buf, '\n');
+    if (nl)
+    {
+        *nl = '\0'; // временно завершаем первую строку нулём
+        g_ServiceLine[0] = buf;   // первая строка
+        g_ServiceLine[1] = nl+1;  // оставшаяся строка
+    }
+    else
+    {
+        g_ServiceLine[0] = buf;
+        g_ServiceLine[1] = "";
+    }
+
+    g_ServiceActive = true;
+    g_ServiceStart = CTimer::GetClockTicks();
 }
 
-void CUserInterface::RenderDisplay(void)
+
+
+
+void CUserInterface::LCDMessage(const char* line1, const char* line2)
 {
+    g_ServiceLine[0] = line1 ? line1 : "";
+    g_ServiceLine[1] = line2 ? line2 : "";
+
+    g_ServiceActive = true;
+    g_ServiceStart = CTimer::GetClockTicks();
+}
+
+
+/*void CUserInterface::RenderDisplay(void) {
     const int cols = m_pConfig->GetLCDColumns();
     const int rows = m_pConfig->GetLCDRows();
     const unsigned long now = CTimer::GetClockTicks();
 
-    CString out("\x1B[H\x1B[?25l");
+    CString lcd_ch("\x1B[H\x1B[?25l");
 
     // emulator content
     if (m_pMiniJV880->mcu.mcu.pc != 0) {
-        // ← рисуем эмулятор, как раньше
+        // emulator lcd
         int rowLen[8] = {0};
         int maxLen = 0;
-        for (int r = 0; r < rows && r < 8; ++r) {
+        for (int r = 0; r < rows && r < 2; ++r) {
             for (int c = ACTUAL_COLS - 1; c >= 0; --c)
                 if (m_pMiniJV880->mcu.lcd.LCD_Data[r * 40 + c] != ' ') {
                     rowLen[r] = c + 1;
@@ -584,7 +607,7 @@ void CUserInterface::RenderDisplay(void)
             if (rowLen[r] > maxLen) maxLen = rowLen[r];
         }
 
-        // ← прокрутка, если нужно
+        // scroll
         static int scrollPos = 0, scrollDir = 1;
         static unsigned long lastScroll = 0;
         if (maxLen > cols) {
@@ -599,10 +622,10 @@ void CUserInterface::RenderDisplay(void)
             }
         } else scrollPos = 0;
 
-        for (int row = 0; row < rows && row < 8; ++row) {
+        for (int row = 0; row < rows && row < 2; ++row) {
             const int start = scrollPos;
             if (rowLen[row] == 0) {
-                for (int i = 0; i < cols; ++i) out += ' ';
+                for (int i = 0; i < cols; ++i) lcd_ch += ' ';
                 continue;
             }
             const int csrRow = m_pMiniJV880->mcu.lcd.LCD_DD_RAM / 0x40;
@@ -616,58 +639,267 @@ void CUserInterface::RenderDisplay(void)
                     m_pMiniJV880->mcu.lcd.LCD_Data[row * 40 + src] : ' ';
                 if (ch == 0x09) ch = 0x7C;
                 else if (ch < 32 || ch > 126) ch = ' ';
-                out += (csrOn && row == csrRow && src == csrCol) ? '_' : (char)ch;
+                lcd_ch += (csrOn && row == csrRow && src == csrCol) ? '_' : (char)ch;
             }
         }
     } else {
         // ← placeholder
-        out += "\x1B[1;1H";
-        out += "Start MiniJV880";
-        out += "\x1B[2;1H";
-        out += "version ";
-        out += VERSION_SHORT;
+        lcd_ch += "\x1B[1;1H";
+        lcd_ch += "Start MiniJV880";
+        lcd_ch += "\x1B[2;1H";
+        lcd_ch += "version ";
+        lcd_ch += VERSION_SHORT;
         // ← заполнить пробелами
         for (int row = 0; row < 2; ++row) {
-            while ((int)out.GetLength() < (row + 1) * cols + 7) out += ' ';
+            while ((int)lcd_ch.GetLength() < (row + 1) * cols + 7) lcd_ch += ' ';
         }
     }
 
-    // message overlay
     const unsigned long dt = now - m_msgTime;
+
+					static bool bLogged = false;
+
+    // ensure m_msg is always null-terminated (safety)
+    m_msg[sizeof(m_msg) - 1] = '\0';
+
+		    if (strstr(m_msg, "Saved NVRAM") != NULL && !bLogged) {
+				bLogged = true;
+				const char* lcd_str = (const char*)lcd_ch;
+				int len = lcd_ch.GetLength();
+				
+				// Выведем как HEX строку одной строкой (последние 60 байт)
+				LOGNOTE("=== NVRAM: len=%d FULL DUMP:", len);
+				char hex[600] = {0};
+				for (int i = 0; i < len && i < 200; ++i) {
+					char buf[4];
+					sprintf(buf, "%02X ", (u8)lcd_str[i]);
+					strcat(hex, buf);
+				}
+				LOGNOTE("HEX: %s", hex);
+		
+			}
+
+
     if (m_msg[0] && dt < m_msgDur) {
+        // message is active -> render it safely and fully overwrite message area
         if (rows <= 2) {
-            out = "\x1B[H\x1B[?25l\x1B[2J";
+            // clear and render into 1..rows
+            lcd_ch += "\x1B[H\x1B[?25l\x1B[2J";
+
             const char* p = m_msg;
-            for (int row = 0; row < rows && *p; ++row) {
-                for (int col = 0; col < cols && *p; ++col) {
-                    if (*p == '\n') { ++p; break; }
-                    out += (*p >= 32 && *p <= 126) ? *p++ : ' ';
+            for (int row = 0; row < rows; ++row) {
+                // move cursor to start of this row
+                if (row == 0) lcd_ch += "\x1B[1;1H";
+                else if (row == 1) lcd_ch += "\x1B[2;1H";
+
+                // take one line from p (until '\n' or end)
+                const char* e = p;
+                while (*e && *e != '\n') ++e;
+                int len = (int)(e - p);
+                if (len > cols) len = cols;
+
+                for (int i = 0; i < len; ++i) {
+                    char ch = p[i];
+                    lcd_ch += (ch >= 32 && ch <= 126) ? ch : ' ';
                 }
-                while (*p && *p != '\n') ++p;
-                if (*p == '\n') ++p;
-                while ((int)out.GetLength() < (row + 1) * cols + 7) out += ' ';
+                // pad to full width
+                for (int i = len; i < cols; ++i) lcd_ch += ' ';
+
+                if (*e == '\n') ++e;
+                p = e;
             }
         } else {
+            // rows > 2 -> render message on rows 3 and 4, but always fully overwrite those rows
+            // prepare first message line (row 3)
             const char* p = m_msg;
-            out += "\x1B[3;1H";
             const char* e1 = p;
             while (*e1 && *e1 != '\n') ++e1;
-            for (const char* s = p; s < e1 && (s - p) < cols; ++s)
-                out += (*s >= 32 && *s <= 126) ? *s : ' ';
-            for (int i = 0; i < cols - (e1 - p); ++i) out += ' ';
+            int len1 = (int)(e1 - p);
+            if (len1 > cols) len1 = cols;
 
-            out += "\x1B[4;1H";
-            p = e1;
-            if (*p == '\n') ++p;
+            lcd_ch += "\x1B[3;1H";
+            for (int i = 0; i < len1; ++i) {
+                char ch = p[i];
+                lcd_ch += (ch >= 32 && ch <= 126) ? ch : ' ';
+            }
+            for (int i = len1; i < cols; ++i) lcd_ch += ' ';
+
+            // second message line (row 4)
+			p = e1;
+			if (*p == '\n') ++p;
             const char* e2 = p;
             while (*e2 && *e2 != '\n') ++e2;
-            for (const char* s = p; s < e2 && (s - p) < cols; ++s)
-                out += (*s >= 32 && *s <= 126) ? *s : ' ';
-            for (int i = 0; i < cols - (e2 - p); ++i) out += ' ';
+            int len2 = (int)(e2 - p);
+            if (len2 > cols) len2 = cols;
+
+            lcd_ch += "\x1B[4;1H";
+            // После определения p (начало второй строки) и len2:
+            //LOGNOTE("Render: len2=%d len1=%d second_line_start='%.*s' out='%s' msg='%s'",
+            //        len2, len1, len2, p, lcd_ch, m_msg);
+            for (int i = 0; i < len2; ++i) {
+                char ch = p[i];
+                lcd_ch += (ch >= 32 && ch <= 126) ? ch : ' ';
+            }
+            for (int i = len2; i < cols; ++i) lcd_ch += ' ';
         }
     } else {
-        m_msg[0] = 0;   // expired
+        // message expired OR empty -> ensure message area is fully cleared (overwrite with spaces)
+        // do NOT clear m_msg before we've physically overwritten the display
+        if (rows <= 2) {
+            lcd_ch += "\x1B[1;1H";
+            for (int i = 0; i < cols; ++i) lcd_ch += ' ';
+            if (rows >= 2) {
+                lcd_ch += "\x1B[2;1H";
+                for (int i = 0; i < cols; ++i) lcd_ch += ' ';
+            }
+        } else {
+            lcd_ch += "\x1B[3;1H";
+            for (int i = 0; i < cols; ++i) lcd_ch += ' ';
+            lcd_ch += "\x1B[4;1H";
+            for (int i = 0; i < cols; ++i) lcd_ch += ' ';
+        }
+        // now it's safe to clear the logical message buffer
+        m_msg[0] = 0;
     }
 
-    LCDWrite(out);
+    	static bool bDumped = false;
+		if (strstr((const char*)lcd_ch, "Saved NVRAM") != NULL && !bDumped) {
+			bDumped = true;
+			const char* lcd_str = (const char*)lcd_ch;
+			int len = lcd_ch.GetLength();
+			LOGNOTE("=== FULL LCD_CH DUMP len=%d ===", len);
+			
+			char hex[600] = {0};
+			for (int i = 0; i < len && i < 200; ++i) {
+				char buf[4];
+				sprintf(buf, "%02X ", (u8)lcd_str[i]);
+				strcat(hex, buf);
+			}
+			LOGNOTE("HEX: %s", hex);
+		} else if (!strstr((const char*)lcd_ch, "Saved NVRAM")) {
+			bDumped = false;
+		}
+
+	LCDWrite(lcd_ch); 
+}*/
+
+void CUserInterface::RenderDisplay()
+{
+    // Clear screen and hide cursor
+    CString Msg("\x1B[H\x1B[?25l");
+    int displayCols = m_pConfig->GetLCDColumns();
+    int displayRows = m_pConfig->GetLCDRows();
+    unsigned long currentTime = CTimer::GetClockTicks();
+
+    bool emuActive = (m_pMiniJV880->mcu.mcu.pc != 0);
+
+    // --- calculate top and bottom rows ---
+    int topRows = (displayRows >= 4) ? 2 : displayRows;   // emulator or start message
+    int bottomRows = (displayRows >= 4) ? 2 : 0;         // service message
+
+    // --- determine service message visibility ---
+    bool showService = false;
+    if (g_ServiceActive)
+    {
+        // GetClockTicks() returns microseconds
+        if (currentTime - g_ServiceStart < 3000000) // 3 seconds
+            showService = true;
+        else
+            g_ServiceActive = false; // auto-hide expired message
+    }
+
+    // --- render emulator or start message in top rows ---
+    if (emuActive)
+    {
+        int cursorRow = m_pMiniJV880->mcu.lcd.LCD_DD_RAM / 0x40;
+        int cursorCol = m_pMiniJV880->mcu.lcd.LCD_DD_RAM % 0x40;
+        bool cursorEnabled = m_pMiniJV880->mcu.lcd.LCD_C != 0;
+        if (cursorRow >= topRows) cursorRow = 0;
+
+        for (int row = 0; row < topRows; row++)
+        {
+            int startPos = 0; // can be replaced with unifiedScrollPos
+            for (int col = 0; col < displayCols; col++)
+            {
+                int sourcePos = col + startPos;
+                uint8_t ch = (sourcePos < ACTUAL_COLS) ? m_pMiniJV880->mcu.lcd.LCD_Data[row * 40 + sourcePos] : ' ';
+                if (ch == 0x09) ch = '|';
+                else if (ch < 32 || ch > 126) ch = ' ';
+
+                if (cursorEnabled && row == cursorRow && sourcePos == cursorCol)
+                    Msg.Append("_");
+                else
+                {
+                    char buf[2] = { (char)ch, 0 };
+                    Msg.Append(buf);
+                }
+            }
+        }
+    }
+    else if (displayRows >= 4)
+    {
+        // Emulator not running → show start message in top 2 rows
+        const char* startMsg1 = "Start MiniJV880pi";
+        char startMsg2[64];
+        snprintf(startMsg2, sizeof(startMsg2), "version %s", VERSION_SHORT);
+
+        for (int i = 0; i < topRows; i++)
+        {
+            char cursorPos[32];
+            snprintf(cursorPos, sizeof(cursorPos), "\x1B[%d;1H", i + 1);
+            Msg.Append(cursorPos);
+
+            const char* line = (i == 0) ? startMsg1 : startMsg2;
+            for (int c = 0; c < displayCols; c++)
+            {
+                char ch = (c < (int)strlen(line)) ? line[c] : ' ';
+                char buf[2] = { ch, 0 };
+                Msg.Append(buf);
+            }
+        }
+    }
+
+    // --- render service message in bottom rows ---
+    int baseRow = (displayRows >= 4) ? topRows : 0;
+    int lines = (displayRows >= 4) ? bottomRows : topRows;
+
+    if (showService)
+    {
+        for (int i = 0; i < lines; i++)
+        {
+            char cursorPos[32];
+            snprintf(cursorPos, sizeof(cursorPos), "\x1B[%d;1H", baseRow + i + 1);
+            Msg.Append(cursorPos);
+
+            for (int c = 0; c < displayCols; c++)
+            {
+                char ch = (c < (int)g_ServiceLine[i].GetLength()) ? g_ServiceLine[i][c] : ' ';
+                char buf[2] = { ch, 0 };
+                Msg.Append(buf);
+            }
+        }
+    }
+    else
+    {
+        // Clear expired service message
+        g_ServiceActive = false;
+        for (int i = 0; i < lines; i++)
+        {
+            char cursorPos[32];
+            snprintf(cursorPos, sizeof(cursorPos), "\x1B[%d;1H", baseRow + i + 1);
+            Msg.Append(cursorPos);
+
+            for (int c = 0; c < displayCols; c++)
+                Msg.Append(" ");
+        }
+    }
+
+    // --- finally, write message to LCD ---
+    LCDWrite(Msg);
+
+	if (m_pLCDBuffered) m_pLCDBuffered->Update();
 }
+
+
+
+

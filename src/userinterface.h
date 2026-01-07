@@ -49,8 +49,13 @@ public:
 	bool LCDInit(void);
 	void LCDWrite (const char *pString);		
 	void TriggerUIButtonEvent(CUIButton::BtnEvent event);
+	void LCDMessage(const char* line1, const char* line2);
 	void LCDMessage(const char* fmt, ...);
 	void RenderDisplay(void);
+
+	static bool g_ServiceActive;
+    static unsigned long g_ServiceStart;
+    static CString g_ServiceLine[2];
 	
 	// MIDI button mappings - cached from config
     unsigned m_nMIDIButtonChannel;
@@ -111,11 +116,6 @@ private:
 	static const unsigned long SCROLL_INTERVAL = 1000000;
 	static const unsigned long PAUSE_DURATION = 1500000;
 	static const int ACTUAL_COLS = 24;
-    
-     char  m_msg[256];
-    unsigned long m_msgTime = 0;
-    const unsigned m_msgDur = 3000000;   // 3 s
-    bool  m_inProc = false;
 	
 };
 
