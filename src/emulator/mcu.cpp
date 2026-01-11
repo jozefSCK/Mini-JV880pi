@@ -128,7 +128,7 @@ void MCU::MCU_DeviceWrite(uint32_t address, const uint8_t data) {
   case DEV_PWM3_TCR:
     break;
   case DEV_P7DR:
-      if (mcu.cp == 0 && ((mcu.pc & 0xFF00) == 0x3600)) { // Temporary fix, filter out useless data
+      if ((mcu.pc & 0xFF00) == 0x3600) { // Temporary fix, filter out useless data
           if ((io_sd & 1) == 0) {
               jv880_led_state &= ~0x1F;
               if ((data & 0x10) != 0)

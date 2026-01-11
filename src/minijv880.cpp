@@ -193,10 +193,6 @@ bool CMiniJV880::Initialize(void) {
 
   CMultiCoreSupport::Initialize();
   LOGNOTE("initialised");
-    if (m_pConfig->GetExpRom() == 0) {
-      m_UI.LCDMessage("Loaded file\n%s", m_romInfos[m_pConfig->GetExpRom()+6].filename);
-    }
-
   return true;
 }
 
