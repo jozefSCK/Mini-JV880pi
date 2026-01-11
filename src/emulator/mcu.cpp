@@ -128,6 +128,35 @@ void MCU::MCU_DeviceWrite(uint32_t address, const uint8_t data) {
   case DEV_PWM3_TCR:
     break;
   case DEV_P7DR:
+      if (mcu.cp == 0 && ((mcu.pc & 0xFF00) == 0x3600)) { // Temporary fix, filter out useless data
+          if ((io_sd & 1) == 0) {
+              jv880_led_state &= ~0x1F;
+              if ((data & 0x10) != 0)
+                  jv880_led_state |= 1;   // MIDI Message
+              if ((data & 0x08) != 0)
+                  jv880_led_state |= 2;   // Edit
+              if ((data & 0x04) != 0)
+                  jv880_led_state |= 4;   // System
+              if ((data & 0x02) != 0)
+                  jv880_led_state |= 8;   // Rhythm
+              if ((data & 0x01) != 0)
+                  jv880_led_state |= 16;  // Utility
+          }
+
+          if ((io_sd & 2) == 0) {
+              jv880_led_state &= ~0x3E0;
+              if ((data & 0x10) != 0)
+                  jv880_led_state |= 32;   // Patch Perform
+              if ((data & 0x08) != 0)
+                  jv880_led_state |= 64;   // Mute
+              if ((data & 0x04) != 0)
+                  jv880_led_state |= 128;  // Monitor
+              if ((data & 0x02) != 0)
+                  jv880_led_state |= 256;  // Info
+              if ((data & 0x01) != 0)
+                  jv880_led_state |= 512;  // Enter
+          }
+      }
     break;
   case DEV_TMR_TCNT:
     break;
@@ -216,7 +245,8 @@ uint8_t MCU::MCU_DeviceRead(uint32_t address) {
       data &= ((button_pressed >> 10) & 0b1111) ^ 0xFF;
 
     data |= 0b10000000;
-    return data;
+  
+      return data;
   }
   case DEV_P9DR: {
     int cfg = 2;

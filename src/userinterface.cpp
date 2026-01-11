@@ -529,6 +529,7 @@ void CUserInterface::UIButtonsEventHandler (CUIButton::BtnEvent Event)
 
 	//LOGNOTE("Button: %x", btn);
 	m_pMiniJV880->mcu.mcu_button_pressed = btn;
+	//LOGNOTE("Led state: 0x%08X", m_pMiniJV880->mcu.jv880_led_state);
 }
 
 void CUserInterface::UIButtonsEventStub (CUIButton::BtnEvent Event, void *pParam)
@@ -859,11 +860,57 @@ void CUserInterface::RenderDisplay()
         }
     }
 
-    // --- render service message in bottom rows ---
+    // --- render LED states in bottom rows when emulator active and no service message---
     int baseRow = (displayRows >= 4) ? topRows : 0;
     int lines = (displayRows >= 4) ? bottomRows : topRows;
 
-    if (showService)
+    if (emuActive && displayRows >= 4 && !showService)
+    {
+        // Get LED state from MCU - corrected access path
+        uint16_t ledState = m_pMiniJV880->mcu.jv880_led_state;
+        
+        // Define LED names (exactly 4 characters each + 1 space = 5 chars total)
+        const char* ledNames[] = {
+            "MIDI", "Edit", "Syst", "Ryth", "Util",  // First 5 bits (0-4)
+            "PPrf", "Mute", "Moni", "Info", "Entr"   // Next 5 bits (5-9)
+        };
+
+        // Render LED states - first 5 on first row, next 5 on second row
+        for (int i = 0; i < 2; i++)  // Two bottom rows for LED states
+        {
+            char cursorPos[32];
+            snprintf(cursorPos, sizeof(cursorPos), "\x1B[%d;1H", baseRow + i + 1);
+            Msg.Append(cursorPos);
+
+            int ledsPerRow = 5;  // 5 LEDs per row (total 10)
+            for (int j = 0; j < ledsPerRow; j++)
+            {
+                int ledIndex = i * ledsPerRow + j;
+                bool isOn = (ledState & (1 << ledIndex)) != 0;
+                
+                if (isOn)
+                {
+                    // Display the 4-character name + space when bit is active
+                    for (int k = 0; k < 4; k++)
+                    {
+                        char buf[2] = { ledNames[ledIndex][k], 0 };
+                        Msg.Append(buf);
+                    }
+                    Msg.Append(" "); // Add space after each 4-char word
+                }
+                else
+                {
+                    // Display 4 spaces + 1 space when bit is inactive (total 5 chars)
+                    for (int k = 0; k < 5; k++)
+                    {
+                        Msg.Append(" ");
+                    }
+                }
+            }
+        }
+    }
+    // --- render service message in bottom rows (takes priority) ---
+    else if (showService)
     {
         for (int i = 0; i < lines; i++)
         {
@@ -881,7 +928,7 @@ void CUserInterface::RenderDisplay()
     }
     else
     {
-        // Clear expired service message
+        // Clear bottom rows when no service message and emulator inactive
         g_ServiceActive = false;
         for (int i = 0; i < lines; i++)
         {
@@ -897,9 +944,4 @@ void CUserInterface::RenderDisplay()
     // --- finally, write message to LCD ---
     LCDWrite(Msg);
 
-	if (m_pLCDBuffered) m_pLCDBuffered->Update();
 }
-
-
-
-

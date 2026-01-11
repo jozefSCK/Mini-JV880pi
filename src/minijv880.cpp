@@ -193,6 +193,9 @@ bool CMiniJV880::Initialize(void) {
 
   CMultiCoreSupport::Initialize();
   LOGNOTE("initialised");
+    if (m_pConfig->GetExpRom() == 0) {
+      m_UI.LCDMessage("Loaded file\n%s", m_romInfos[m_pConfig->GetExpRom()+6].filename);
+    }
 
   return true;
 }
@@ -286,6 +289,7 @@ void CMiniJV880::HandleFullMIDIMessage(const uint8_t* pData, uint8_t nLength)
                     if (ccNumber == confCC) {
                         if (ccValue < 64) m_UI.TriggerUIButtonEvent(ev);
                         else m_UI.TriggerUIButtonEvent(CUIButton::BtnEventRelease);
+                        //LOGNOTE("Led state midi: 0x%08X", mcu.jv880_led_state);
                         return true;
                     }
                     return false;
@@ -621,9 +625,7 @@ bool CMiniJV880::LoadRom(uint8_t rom_index) {
     }
     
     // Mark as loaded
-    LOGNOTE("Loading file\n%s", rom.filename);
-    m_UI.LCDMessage("Loading file\n%s", rom.filename);
-    m_UI.RenderDisplay();
+    LOGNOTE("Loaded file %s", rom.filename);
     CTimer::SimpleMsDelay(300);
     rom.isLoaded = true;
     return true;

@@ -285,6 +285,7 @@ struct MCU {
   uint8_t dev_register[0x80] = {0};
 
   uint8_t io_sd = 0x00;
+  uint16_t jv880_led_state;
 
   int adf_rd = 0;
   uint64_t analog_end_time = 0;
