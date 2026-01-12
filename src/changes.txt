@@ -1,5 +1,5 @@
 1.1.0
-Fixed buttons send to SC55
+Fixed buttons send to NukedSC55
 Turned on internal resampler to 64 khz
 Sound driver switched to 64 khz
 Added Up and Down buttons if no encoder (check .ini)
@@ -7,7 +7,8 @@ Added synchronized MIDI parser
 Added Expanded ROM load at start (check .ini)
 Changed .bin loader
 Added save NVRAM via MIDI command (check .ini)
-Added checksum to Roland sysex messages sended to JV880
+Added calculation checksum to Roland sysex messages sended to JV880
+Added indication of all original JV880 LEDs on 4x25 OLED Display
 
 ToDo:
 

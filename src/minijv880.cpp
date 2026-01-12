@@ -260,7 +260,6 @@ void CMiniJV880::HandleFullMIDIMessage(const uint8_t* pData, uint8_t nLength)
 
     // ===== Priority 4: Bank Switch (CC 32) =====
     if ((status & 0xF0) == 0xB0 && nLength == 3 && pData[1] == 32) {
-    // Убираем комментарий, добавляем проверку канала если нужно
       m_nPendingBankSwitch.store(pData[2] & 0x7F, std::memory_order_release);
     
     }
@@ -324,7 +323,7 @@ void CMiniJV880::HandleFullMIDIMessage(const uint8_t* pData, uint8_t nLength)
     if (pData[0] == 0xF0 && nLength > 7 && pData[nLength-1] == 0xF7) {
         if (pData[1] == 0x41) { // Roland
             int chk_idx = nLength - 2;
-            if (chk_idx < 6) return; // нужно минимум 5 байт до chk
+            if (chk_idx < 6) return; 
 
             // Sum last 5 bytes before checksum
             int sum = 0;
