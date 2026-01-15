@@ -147,7 +147,7 @@ void CUserInterface::Process(void)
 
     RenderDisplay(); 
 
-    if (m_pLCDBuffered) m_pLCDBuffered->Update();
+    if (m_pLCDBuffered) m_pLCDBuffered->Update(256);
 
 }
 
@@ -495,20 +495,9 @@ void CUserInterface::LCDMessage(const char* fmt, ...)
 
 
 
-void CUserInterface::LCDMessage(const char* line1, const char* line2)
-{
-    g_ServiceLine[0] = line1 ? line1 : "";
-    g_ServiceLine[1] = line2 ? line2 : "";
-
-    g_ServiceActive = true;
-    g_ServiceStart = CTimer::GetClockTicks();
-}
-
-
-
 void CUserInterface::RenderDisplay()
 {
-    // Clear screen and hide cursor - ONLY ONE ESCAPE SEQUENCE
+    // Clear screen and hide cursor
     CString Msg("\x1B[H\x1B[?25l");
     int displayCols = m_pConfig->GetLCDColumns();
     int displayRows = m_pConfig->GetLCDRows();
@@ -524,11 +513,11 @@ void CUserInterface::RenderDisplay()
     static int scrollDir = 1;
     static unsigned long lastScrollTime = 0;
 
-    // --- calculate top and bottom rows ---
+    // Calculate top and bottom rows
     int topRows = (displayRows >= 4) ? 2 : displayRows;
     int bottomRows = (displayRows >= 4) ? 2 : 0;
 
-    // --- determine service message visibility ---
+    // Determine service message visibility
     bool showService = false;
     if (g_ServiceActive)
     {
@@ -538,20 +527,17 @@ void CUserInterface::RenderDisplay()
             g_ServiceActive = false;
     }
 
-    // ============================================
-    // 2-СТРОЧНЫЙ РЕЖИМ
-    // ============================================
+    // 2-ROW MODE
     if (displayRows < 4)
     {
         if (showService)
         {
-            // Service message в 2-строчном режиме
+            // Service message
             for (int i = 0; i < displayRows; i++)
             {
-                int len = (i < 2) ? g_ServiceLine[i].GetLength() : 0;
                 for (int c = 0; c < displayCols; c++)
                 {
-                    char ch = (c < len) ? g_ServiceLine[i][c] : ' ';
+                    char ch = (c < (int)g_ServiceLine[i].GetLength()) ? g_ServiceLine[i][c] : ' ';
                     if (ch < 32 || ch > 126) ch = ' ';
                     char buf[2] = { ch, 0 };
                     Msg.Append(buf);
@@ -560,9 +546,7 @@ void CUserInterface::RenderDisplay()
         }
         else if (emuActive)
         {
-            // Emulator with scrolling в 2-строчном режиме
-            
-            // Compute actual length of each row for scrolling
+            // Emulator with scrolling
             int rowLen[2] = {0, 0};
             int maxRowLen = 0;
             for (int r = 0; r < displayRows; r++) {
@@ -622,7 +606,7 @@ void CUserInterface::RenderDisplay()
         }
         else
         {
-            // Start message в 2-строчном режиме
+            // Start message
             const char* startMsg1 = "Start MiniJV880pi";
             char startMsg2[64];
             snprintf(startMsg2, sizeof(startMsg2), "version %s", VERSION_SHORT);
@@ -640,12 +624,10 @@ void CUserInterface::RenderDisplay()
             }
         }
     }
-    // ============================================
-    // 4-СТРОЧНЫЙ РЕЖИМ
-    // ============================================
+    // 4-ROW MODE
     else
     {
-        // --- СТРОКИ 1-2: render emulator or start message ---
+        // Render emulator or start message in top rows
         if (emuActive)
         {
             int cursorRow = m_pMiniJV880->mcu.lcd.LCD_DD_RAM / 0x40;
@@ -656,8 +638,6 @@ void CUserInterface::RenderDisplay()
             for (int row = 0; row < topRows; row++)
             {
                 int startPos = 0;
-                int colsWritten = 0;
-                
                 for (int col = 0; col < displayCols; col++)
                 {
                     int sourcePos = col + startPos;
@@ -672,20 +652,12 @@ void CUserInterface::RenderDisplay()
                         char buf[2] = { (char)ch, 0 };
                         Msg.Append(buf);
                     }
-                    colsWritten++;
-                }
-                
-                // Если нужно, заполним до displayCols (на случай если ACTUAL_COLS < displayCols)
-                while (colsWritten < displayCols)
-                {
-                    Msg.Append(" ");
-                    colsWritten++;
                 }
             }
         }
         else
         {
-            // Start message in top 2 rows
+            // Emulator not running - show start message in top 2 rows
             const char* startMsg1 = "Start MiniJV880pi";
             char startMsg2[64];
             snprintf(startMsg2, sizeof(startMsg2), "version %s", VERSION_SHORT);
@@ -693,124 +665,77 @@ void CUserInterface::RenderDisplay()
             for (int i = 0; i < topRows; i++)
             {
                 const char* line = (i == 0) ? startMsg1 : startMsg2;
-                int len = strlen(line);
                 for (int c = 0; c < displayCols; c++)
                 {
-                    char ch = (c < len) ? line[c] : ' ';
+                    char ch = (c < (int)strlen(line)) ? line[c] : ' ';
                     char buf[2] = { ch, 0 };
                     Msg.Append(buf);
                 }
             }
         }
 
-        // --- СТРОКИ 3-4: render bottom rows ---
+        // Render LED states or service message in bottom rows
         if (emuActive && !showService)
         {
-            // LED states in bottom rows
+            // Get LED state from MCU
             uint16_t ledState = m_pMiniJV880->mcu.jv880_led_state;
             
+            // Define LED names (exactly 4 characters each + 1 space = 5 chars total)
             const char* ledNames[] = {
                 "MIDI", "Edit", "Syst", "Ryth", "Util",
                 "PPrf", "Mute", "Moni", "Info", "Entr"
             };
 
-            static bool debugDone2 = false;
-
-            // Render LED states - NO CURSOR POSITIONING, just sequential output
+            // Render LED states - first 5 on first row, next 5 on second row
+            // No cursor positioning - sequential output only
             for (int i = 0; i < 2; i++)
             {
-                int charsWritten = 0;
                 int ledsPerRow = 5;
-                
-                if (i == 1 && !debugDone2) {
-                    printf("\n=== DEBUG ROW 4 START ===\n");
-                    printf("displayCols = %d\n", displayCols);
-                    printf("LED state: 0x%04X\n", ledState);
-                }
-                
                 for (int j = 0; j < ledsPerRow; j++)
                 {
-                    // Проверяем ПЕРЕД началом вывода LED - есть ли место для 5 символов?
-                    if (charsWritten + 5 > displayCols)
-                    {
-                        if (i == 1 && !debugDone2) {
-                            printf("BREAK at LED %d, charsWritten=%d\n", i*5+j, charsWritten);
-                        }
-                        break;
-                    }
-                    
                     int ledIndex = i * ledsPerRow + j;
                     bool isOn = (ledState & (1 << ledIndex)) != 0;
                     
-                    // Определяем что показывать
-                    const char* displayName;
-                    bool showLED;
-                    
+                    // Special case for LED 5 (Part/Performance mode)
                     if (ledIndex == 5)
                     {
-                        displayName = isOn ? "Ptch" : "Perf";
-                        showLED = true;
-                    }
-                    else
-                    {
-                        displayName = ledNames[ledIndex];
-                        showLED = isOn;
-                    }
-                    
-                    if (i == 1 && !debugDone2) {
-                        printf("LED %d (%s): %s, will output: %s, charsWritten=%d\n", 
-                               ledIndex, ledNames[ledIndex], isOn?"ON":"OFF", 
-                               showLED ? displayName : "spaces", charsWritten);
-                    }
-                    
-                    if (showLED)
-                    {
+                        const char* name = isOn ? "Ptch" : "Perf";
                         for (int k = 0; k < 4; k++)
                         {
-                            char buf[2] = { displayName[k], 0 };
+                            char buf[2] = { name[k], 0 };
                             Msg.Append(buf);
-                            charsWritten++;
                         }
                         Msg.Append(" ");
-                        charsWritten++;
+                    }
+                    else if (isOn)
+                    {
+                        // Display the 4-character name + space when bit is active
+                        for (int k = 0; k < 4; k++)
+                        {
+                            char buf[2] = { ledNames[ledIndex][k], 0 };
+                            Msg.Append(buf);
+                        }
+                        Msg.Append(" ");
                     }
                     else
                     {
+                        // Display 5 spaces when bit is inactive
                         for (int k = 0; k < 5; k++)
                         {
                             Msg.Append(" ");
-                            charsWritten++;
                         }
                     }
-                }
-                
-                if (i == 1 && !debugDone2) {
-                    printf("After LED loop: charsWritten=%d\n", charsWritten);
-                }
-                
-                // Заполнить остаток строки пробелами
-                while (charsWritten < displayCols)
-                {
-                    Msg.Append(" ");
-                    charsWritten++;
-                }
-                
-                if (i == 1 && !debugDone2) {
-                    printf("After padding: charsWritten=%d\n", charsWritten);
-                    printf("=== DEBUG ROW 4 END ===\n\n");
-                    debugDone2 = true;
                 }
             }
         }
         else if (showService)
         {
-            // Service message in bottom rows
-            for (int i = 0; i < 2; i++)
+            // Render service message in bottom rows
+            for (int i = 0; i < bottomRows; i++)
             {
-                int len = g_ServiceLine[i].GetLength();
                 for (int c = 0; c < displayCols; c++)
                 {
-                    char ch = (c < len) ? g_ServiceLine[i][c] : ' ';
+                    char ch = (c < (int)g_ServiceLine[i].GetLength()) ? g_ServiceLine[i][c] : ' ';
                     char buf[2] = { ch, 0 };
                     Msg.Append(buf);
                 }
@@ -818,8 +743,9 @@ void CUserInterface::RenderDisplay()
         }
         else
         {
-            // Clear bottom rows
-            for (int i = 0; i < 2; i++)
+            // Clear bottom rows when no service message and emulator inactive
+            g_ServiceActive = false;
+            for (int i = 0; i < bottomRows; i++)
             {
                 for (int c = 0; c < displayCols; c++)
                     Msg.Append(" ");
@@ -827,6 +753,6 @@ void CUserInterface::RenderDisplay()
         }
     }
 
-    // --- finally, write message to LCD ---
+    // Write message to LCD
     LCDWrite(Msg);
 }
