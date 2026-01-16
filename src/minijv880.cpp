@@ -260,8 +260,10 @@ void CMiniJV880::HandleFullMIDIMessage(const uint8_t* pData, uint8_t nLength)
 
     // ===== Priority 4: Bank Switch (CC 32) =====
     if ((status & 0xF0) == 0xB0 && nLength == 3 && pData[1] == 32) {
-      m_nPendingBankSwitch.store(pData[2] & 0x7F, std::memory_order_release);
-    
+      uint8_t bankNum = pData[2] & 0x7F;
+        m_nPendingBankSwitch.store(bankNum, std::memory_order_release);
+        switchPatchBank(bankNum);
+        return;
     }
 
     // ===== Priority 5: NVRAM Save Trigger =====
@@ -504,6 +506,7 @@ void CMiniJV880::Run(unsigned nCore) {
 
         while (true) {
             if (m_bAudioPaused.load(std::memory_order_acquire)) {
+                last_generated_cycles = __atomic_load_n(&mcu.mcu.cycles, __ATOMIC_ACQUIRE); // Синхронизация!
                 CTimer::SimpleMsDelay(1);
                 continue;
             }
@@ -621,6 +624,8 @@ bool CMiniJV880::LoadRom(uint8_t rom_index) {
     
     // Mark as loaded
     LOGNOTE("Loaded file %s", rom.filename);
+
+    m_UI.LCDMessage("Loaded Expanded\n%s", rom.filename);
     CTimer::SimpleMsDelay(300);
     rom.isLoaded = true;
     return true;
@@ -681,32 +686,37 @@ void CMiniJV880::UnscrambleRom(const uint8_t *src, uint8_t *dst, int len) {
 }
 
 void CMiniJV880::switchPatchBank(int bankNumber) {
-    LOGNOTE("Switching to bank %d", bankNumber);
-
-    if (bankNumber < 0 || bankNumber > 19) {
-        LOGERR("Invalid bank number");
-        return;
-    }
-
+    if (bankNumber < 0 || bankNumber > 19) return;
+    
     int romIndex = (bankNumber == 0) ? 6 : 6 + bankNumber;
     RomInfo& rom = m_romInfos[romIndex];
     
-
-    if (!rom.isLoaded && !LoadRom(romIndex)) {
-        LOGERR("Failed to load ROM: %s", rom.filename);
-        return;
-    }
+    if (!rom.isLoaded && !LoadRom(romIndex)) return;
    
+    // 1. Остановить ВСЁ
     m_bAudioPaused.store(true, std::memory_order_release);
-    CTimer::SimpleMsDelay(5);
-    LOGNOTE("BEFORE memcpy: waverom_exp=%p, rom.data=%p, size=%zu", mcu.pcm.waverom_exp, rom.data, EXP_SIZE);
-    LOGNOTE("waverom_exp first 32 bytes:", mcu.pcm.waverom_exp, 32);
-    LOGNOTE("rom.data first 32 bytes:", rom.data, 32);
+    CTimer::SimpleMsDelay(100);  // Убедиться что оба Core остановились
+
+    mcu.mcu.ex_ignore = 1;  // Игнорировать прерывания
+    mcu.ga_int_enable = 0;  // Отключить прерывания
+    mcu.ga_int_trigger = 0; // Очистить триггеры
+    
+    // 2. Копировать ROM
     memcpy(mcu.pcm.waverom_exp, rom.data, EXP_SIZE);
-    LOGNOTE("waverom_exp AFTER copy first 32 bytes:", mcu.pcm.waverom_exp, 32);
-    //mcu.SC55_Reset();
+    
+    // 3. Полный reset (обнуляет mcu.mcu.cycles!)
+    mcu.SC55_Reset();
+    
+    // 4. КРИТИЧНО: Обнулить sample_write_idx ПОСЛЕ reset
+    __atomic_store_n(&sample_write_idx, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&sample_read_idx, 0, __ATOMIC_RELEASE);
+    
+    std::atomic_thread_fence(std::memory_order_seq_cst);
+    
+    // 5. Возобновить - Core 3 синхронизируется автоматически
     m_bAudioPaused.store(false, std::memory_order_release);
-    LOGNOTE("Bank switched to %d: %s", bankNumber, rom.filename);
+    
+    LOGNOTE("Bank switched to %d", bankNumber);
 }
 
 // additional temporary functions 

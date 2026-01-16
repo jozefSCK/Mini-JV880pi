@@ -291,7 +291,7 @@ bool CUserInterface::LCDInit()
 		assert (m_pLCDBuffered);
 
 		LCDWrite ("\x1B[?25l\x1B""d+");		// cursor off, autopage mode
-		LCDWrite ("Start MiniJV880pi\n");
+		LCDWrite ("Start Mini-JV880pi\n");
 		LCDWrite ("version ");
 		LCDWrite (VERSION_SHORT);
 		m_pLCDBuffered->Update ();
@@ -464,6 +464,15 @@ void CUserInterface::TriggerUIButtonEvent(CUIButton::BtnEvent event)
     {
         UIButtonsEventHandler(event);
     }
+}
+
+void CUserInterface::LCDMessage(const char* line1, const char* line2)
+{
+    g_ServiceLine[0] = line1 ? line1 : "";
+    g_ServiceLine[1] = line2 ? line2 : "";
+
+    g_ServiceActive = true;
+    g_ServiceStart = CTimer::GetClockTicks();
 }
 
 void CUserInterface::LCDMessage(const char* fmt, ...)
@@ -658,7 +667,7 @@ void CUserInterface::RenderDisplay()
         else
         {
             // Emulator not running - show start message in top 2 rows
-            const char* startMsg1 = "Start MiniJV880pi";
+            const char* startMsg1 = "Start Mini-JV880pi";
             char startMsg2[64];
             snprintf(startMsg2, sizeof(startMsg2), "version %s", VERSION_SHORT);
 

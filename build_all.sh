@@ -13,6 +13,7 @@ git submodule update --init --recursive
 sh submod.sh
 
 mkdir -p build
+rm -rf build/*
 
 RPI=3 bash build.sh
 cp src/*.img build/
@@ -24,3 +25,4 @@ RPI=5 bash build.sh
 cp src/*.img build/
 
 cp src/minijv880.ini build/
+cp src/changes.txt build/
