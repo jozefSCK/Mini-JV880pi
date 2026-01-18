@@ -77,6 +77,8 @@ public:
   int s_log_counter = 0;
   void SaveNVRAMIncremental();
   void switchPatchBank(int bankNumber);
+  void InitBankMappings();
+  void ParseAndAddMapping(const char* filename);
 
   MCU mcu;
 
@@ -90,6 +92,15 @@ private:
         bool needsUnscramble;
         void* data;
     };
+
+struct BankMapping {
+    int bankNumber;
+    int romIndex;
+    char nvramFilename[16];  // Store nvram filename for loading
+};
+  BankMapping* m_bankMappings;
+  unsigned m_bankMappingsCount;
+  unsigned m_bankMappingsCapacity;
 
   static constexpr size_t sz32K = 32 * 1024;
   static constexpr size_t sz128K = 128 * 1024;

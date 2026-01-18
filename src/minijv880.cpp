@@ -146,6 +146,7 @@ bool CMiniJV880::Initialize(void) {
 	ser_options &= ~(SERIAL_OPTION_ONLCR);
 	m_Serial.SetOptions(ser_options);
    LOGNOTE("Serial MIDI Initialized");
+   InitBankMappings();
     midiParser.Init(this);
     memset(mcu.lcd.LCD_Data, 0x20, sizeof(mcu.lcd.LCD_Data));
     mcu.mcu.pc=0; //mcu not running   
@@ -689,7 +690,7 @@ void CMiniJV880::UnscrambleRom(const uint8_t *src, uint8_t *dst, int len) {
     }
 }
 
-void CMiniJV880::switchPatchBank(int bankNumber) {
+/*void CMiniJV880::switchPatchBank(int bankNumber) {
     if (bankNumber < 0 || bankNumber > 19) return;
     
     int romIndex = (bankNumber == 0) ? 6 : 6 + bankNumber;
@@ -721,6 +722,153 @@ void CMiniJV880::switchPatchBank(int bankNumber) {
     m_bAudioPaused.store(false, std::memory_order_release);
     
     LOGNOTE("Bank switched to %d", bankNumber);
+}*/
+
+// In initialization method (e.g., constructor or Init):
+void CMiniJV880::InitBankMappings() {
+    // Initialize array
+    m_bankMappingsCount = 0;
+    m_bankMappingsCapacity = 32;  // Initial capacity
+    m_bankMappings = new BankMapping[m_bankMappingsCapacity];
+    
+    // Scan patch folder for files like XXnvramYY.bin
+    DIR dir;
+    FILINFO fno;
+    
+    FRESULT res = f_opendir(&dir, "SD:/patch");
+    if (res != FR_OK) {
+        LOGERR("Cannot open patch directory: %d", res);
+        return;
+    }
+    
+    while (true) {
+        res = f_readdir(&dir, &fno);
+        if (res != FR_OK || fno.fname[0] == 0) break;
+        
+        // Check if filename contains "nvram" and ".bin"
+        if (strstr(fno.fname, "nvram") && strstr(fno.fname, ".bin")) {
+            ParseAndAddMapping(fno.fname);
+        }
+    }
+    
+    f_closedir(&dir);
+    
+    LOGNOTE("Loaded %u bank mappings", m_bankMappingsCount);
+}
+
+void CMiniJV880::ParseAndAddMapping(const char* filename) {
+    // Format: XXnvramYY.bin
+    size_t len = strlen(filename);
+    if (len < 12) return;
+    
+    // Extract XX (first 2 characters)
+    if (!isdigit(filename[0]) || !isdigit(filename[1])) return;
+    int bankNumber = (filename[0] - '0') * 10 + (filename[1] - '0');
+    
+    // Find "nvram" position
+    const char* nvramPos = strstr(filename, "nvram");
+    if (!nvramPos || strlen(nvramPos) < 7) return;
+    
+    // Extract YY (2 characters after "nvram")
+    const char* yyPos = nvramPos + 5;
+    if (!isdigit(yyPos[0]) || !isdigit(yyPos[1])) return;
+    
+    int yyNumber = (yyPos[0] - '0') * 10 + (yyPos[1] - '0');
+    int romIndex = yyNumber + 6;
+    
+    // Resize array if needed
+    if (m_bankMappingsCount >= m_bankMappingsCapacity) {
+        m_bankMappingsCapacity *= 2;
+        BankMapping* newArray = new BankMapping[m_bankMappingsCapacity];
+        memcpy(newArray, m_bankMappings, m_bankMappingsCount * sizeof(BankMapping));
+        delete[] m_bankMappings;
+        m_bankMappings = newArray;
+    }
+    
+    m_bankMappings[m_bankMappingsCount].bankNumber = bankNumber;
+    m_bankMappings[m_bankMappingsCount].romIndex = romIndex;
+    strncpy(m_bankMappings[m_bankMappingsCount].nvramFilename, filename, sizeof(m_bankMappings[m_bankMappingsCount].nvramFilename) - 1);
+    m_bankMappings[m_bankMappingsCount].nvramFilename[sizeof(m_bankMappings[m_bankMappingsCount].nvramFilename) - 1] = '\0';
+    m_bankMappingsCount++;
+    
+    LOGNOTE("Mapped bank %d -> ROM index %d, nvram: %s", 
+            bankNumber, romIndex, filename);
+}
+
+void CMiniJV880::switchPatchBank(int bankNumber) {
+    if (bankNumber < 0 || bankNumber > 99) return;
+    
+    // Find corresponding romIndex and nvram filename in mapping
+    int romIndex = -1;
+    const char* nvramFilename = nullptr;
+    for (unsigned i = 0; i < m_bankMappingsCount; i++) {
+        if (m_bankMappings[i].bankNumber == bankNumber) {
+            romIndex = m_bankMappings[i].romIndex;
+            nvramFilename = m_bankMappings[i].nvramFilename;
+            break;
+        }
+    }
+    
+    // If not found in mapping, use old logic
+    if (romIndex == -1) {
+        romIndex = (bankNumber == 0) ? 6 : 6 + bankNumber;
+    }
+    
+    if (romIndex < 0 || (size_t)romIndex >= ROM_COUNT) {
+        LOGERR("Invalid ROM index %d for bank %d", romIndex, bankNumber);
+        return;
+    }
+    
+    RomInfo& rom = m_romInfos[romIndex];
+    
+    if (!rom.isLoaded && !LoadRom(romIndex)) return;
+   
+    // 1. Stop EVERYTHING
+    m_bAudioPaused.store(true, std::memory_order_release);
+    CTimer::SimpleMsDelay(100);  // Make sure both cores stopped
+
+    mcu.mcu.ex_ignore = 1;  // Ignore interrupts
+    mcu.ga_int_enable = 0;  // Disable interrupts
+    mcu.ga_int_trigger = 0; // Clear triggers
+    
+    // 2. Copy ROM
+    memcpy(mcu.pcm.waverom_exp, rom.data, EXP_SIZE);
+    
+    // 3. Load NVRAM if mapping exists
+    if (nvramFilename != nullptr) {
+        char nvramPath[64];
+        snprintf(nvramPath, sizeof(nvramPath), "SD:/patch/%s", nvramFilename);
+        
+        FIL file;
+        FRESULT res = f_open(&file, nvramPath, FA_READ);
+        if (res == FR_OK) {
+            UINT bytesRead;
+            res = f_read(&file, mcu.nvram, sizeof(mcu.nvram), &bytesRead);
+            f_close(&file);
+            
+            if (res == FR_OK && bytesRead == sizeof(mcu.nvram)) {
+                LOGNOTE("Loaded NVRAM from %s (%u bytes)", nvramFilename, bytesRead);
+            } else {
+                LOGERR("Failed to read NVRAM from %s: res=%d, bytes=%u", nvramFilename, res, bytesRead);
+            }
+        } else {
+            LOGERR("Failed to open NVRAM file %s: %d", nvramPath, res);
+        }
+    }
+    
+    // 4. Full reset (clears mcu.mcu.cycles!)
+    mcu.SC55_Reset();
+    
+    // 5. CRITICAL: Zero sample_write_idx AFTER reset
+    __atomic_store_n(&sample_write_idx, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&sample_read_idx, 0, __ATOMIC_RELEASE);
+    
+    std::atomic_thread_fence(std::memory_order_seq_cst);
+    
+    // 6. Resume - Core 3 synchronizes automatically
+    m_bAudioPaused.store(false, std::memory_order_release);
+    
+    LOGNOTE("Bank switched to %d (ROM index %d)", bankNumber, romIndex);
 }
 
 // additional temporary functions 
