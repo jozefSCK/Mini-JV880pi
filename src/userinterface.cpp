@@ -466,14 +466,14 @@ void CUserInterface::TriggerUIButtonEvent(CUIButton::BtnEvent event)
     }
 }
 
-void CUserInterface::LCDMessage(const char* line1, const char* line2)
+/*void CUserInterface::LCDMessage(const char* line1, const char* line2)
 {
     g_ServiceLine[0] = line1 ? line1 : "";
     g_ServiceLine[1] = line2 ? line2 : "";
 
     g_ServiceActive = true;
     g_ServiceStart = CTimer::GetClockTicks();
-}
+}*/
 
 void CUserInterface::LCDMessage(const char* fmt, ...)
 {
@@ -483,17 +483,17 @@ void CUserInterface::LCDMessage(const char* fmt, ...)
     vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
 
-    
+    // Find newline
     char* nl = strchr(buf, '\n');
     if (nl)
     {
-        *nl = '\0'; 
-        g_ServiceLine[0] = buf;   
-        g_ServiceLine[1] = nl+1;  
+        *nl = '\0'; // Split at newline
+        g_ServiceLine[0].Format("%s", buf);      // Copy first line
+        g_ServiceLine[1].Format("%s", nl + 1);   // Copy second line
     }
     else
     {
-        g_ServiceLine[0] = buf;
+        g_ServiceLine[0].Format("%s", buf);
         g_ServiceLine[1] = "";
     }
 

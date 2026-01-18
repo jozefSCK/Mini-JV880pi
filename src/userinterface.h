@@ -49,9 +49,10 @@ public:
 	bool LCDInit(void);
 	void LCDWrite (const char *pString);		
 	void TriggerUIButtonEvent(CUIButton::BtnEvent event);
-	void LCDMessage(const char* line1, const char* line2);
+	//void LCDMessage(const char* line1, const char* line2);
 	void LCDMessage(const char* fmt, ...);
 	void RenderDisplay(void);
+	CWriteBufferDevice* GetLCDBuffered() { return m_pLCDBuffered; }
 
 	static bool g_ServiceActive;
     static unsigned long g_ServiceStart;

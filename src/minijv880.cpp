@@ -581,6 +581,10 @@ bool CMiniJV880::LoadRom(uint8_t rom_index) {
         LOGERR("ROM file not found: %s", rom.filename);
         return false;
     }
+    m_UI.LCDMessage("Loading file\n%s", rom.filename);
+    m_UI.RenderDisplay();
+    m_UI.GetLCDBuffered()->Update(256);
+    
     
     // Check if already loaded
     if (rom.isLoaded) {
@@ -625,7 +629,7 @@ bool CMiniJV880::LoadRom(uint8_t rom_index) {
     // Mark as loaded
     LOGNOTE("Loaded file %s", rom.filename);
 
-    m_UI.LCDMessage("Loaded Expanded\n%s", rom.filename);
+    //m_UI.LCDMessage("Loaded Expanded\n%s", rom.filename);
     CTimer::SimpleMsDelay(300);
     rom.isLoaded = true;
     return true;
