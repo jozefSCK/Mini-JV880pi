@@ -735,7 +735,7 @@ void CMiniJV880::InitBankMappings() {
     DIR dir;
     FILINFO fno;
     
-    FRESULT res = f_opendir(&dir, "SD:/patch");
+    FRESULT res = f_opendir(&dir, "patch");
     if (res != FR_OK) {
         LOGERR("Cannot open patch directory: %d", res);
         return;
@@ -837,7 +837,7 @@ void CMiniJV880::switchPatchBank(int bankNumber) {
     // 3. Load NVRAM if mapping exists
     if (nvramFilename != nullptr) {
         char nvramPath[64];
-        snprintf(nvramPath, sizeof(nvramPath), "SD:/patch/%s", nvramFilename);
+        snprintf(nvramPath, sizeof(nvramPath), "patch/%s", nvramFilename);
         
         FIL file;
         FRESULT res = f_open(&file, nvramPath, FA_READ);
@@ -868,7 +868,7 @@ void CMiniJV880::switchPatchBank(int bankNumber) {
     // 6. Resume - Core 3 synchronizes automatically
     m_bAudioPaused.store(false, std::memory_order_release);
     
-    LOGNOTE("Bank switched to %d (ROM index %d)", bankNumber, romIndex);
+    LOGNOTE("Bank switched to %d (ROM index %d: %s)", bankNumber, romIndex, rom.filename);
 }
 
 // additional temporary functions 

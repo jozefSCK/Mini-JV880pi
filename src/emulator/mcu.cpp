@@ -802,6 +802,7 @@ int MCU::startSC55(const uint8_t *s_rom1, const uint8_t *s_rom2,
   memcpy(rom1, s_rom1, ROM1_SIZE);
   memcpy(rom2, s_rom2, ROM2_SIZE);
   memcpy(nvram, s_nvram, NVRAM_SIZE);
+  memcpy(cardram, s_nvram, CARDRAM_SIZE);
 
   memcpy(pcm.waverom1, s_waverom1, 0x200000);
   memcpy(pcm.waverom2, s_waverom2, 0x200000);
