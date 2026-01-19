@@ -39,7 +39,7 @@ LOGMODULE("minijv880");
 
 CMiniJV880 *CMiniJV880::s_pThis = 0;
 
-CMiniJV880::RomInfo CMiniJV880::m_romInfos[26] = {
+CMiniJV880::RomInfo CMiniJV880::m_romInfos[27] = {
     m_romInfos[0] = {sz32K, "jv880_nvram.bin", false, false, false, nullptr},
     m_romInfos[1] = {sz32K, "jv880_rom1.bin", false, false, false, nullptr},
     m_romInfos[2] = {sz256K, "jv880_rom2.bin", false, false, false, nullptr},
@@ -65,7 +65,8 @@ CMiniJV880::RomInfo CMiniJV880::m_romInfos[26] = {
     m_romInfos[22] = {sz8M, "SR-JV80-16 Orchestral II - CS 0x3F35B03B.bin", true, false, true, nullptr},
     m_romInfos[23] = {sz8M, "SR-JV80-17 Country - CS 0x3ED75089.bin", true, false, true, nullptr},
     m_romInfos[24] = {sz8M, "SR-JV80-18 Latin - CS 0x3EA51033.BIN", true, false, true, nullptr},
-    m_romInfos[25] = {sz8M, "SR-JV80-19 House - CS 0x3E330C41.BIN", true, false, true, nullptr}
+    m_romInfos[25] = {sz8M, "SR-JV80-19 House - CS 0x3E330C41.BIN", true, false, true, nullptr},
+    m_romInfos[26] = {sz8M, "rd500_expansion.bin", true, false, true, nullptr}
 };
 
 
@@ -90,6 +91,7 @@ CMiniJV880::CMiniJV880(CConfig *pConfig, CInterruptSystem *pInterrupt,
       s_pThis = this;
 
       __atomic_store_n(&sample_write_idx, 0u, __ATOMIC_RELAXED);
+      m_nPendingBankSwitch.store(0xFF, std::memory_order_release);
 
   // select the sound device
   const char *pDeviceName = pConfig->GetSoundDevice();
@@ -124,6 +126,7 @@ CMiniJV880::CMiniJV880(CConfig *pConfig, CInterruptSystem *pInterrupt,
 bool CMiniJV880::Initialize(void) {
   assert(m_pConfig);
   assert(m_pSoundDevice);
+  
 
   n_mMCUcycles = m_pConfig->GetMCUcycles ();
   LOGNOTE("MCU cycles %d", n_mMCUcycles);
@@ -194,6 +197,8 @@ bool CMiniJV880::Initialize(void) {
 
   CMultiCoreSupport::Initialize();
   LOGNOTE("initialised");
+  size_t freeMemory = CMemorySystem::Get()->GetHeapFreeSpace(HEAP_ANY);
+  LOGNOTE("Free memory: %u bytes (%.2f MB)", freeMemory, (float)freeMemory / (1024.0f * 1024.0f));
   return true;
 }
 
@@ -201,10 +206,23 @@ void CMiniJV880::Process(bool bPlugAndPlayUpdated) {
 
   m_UI.Process ();
 
-    int pendingBank = m_nPendingBankSwitch.exchange(-1, std::memory_order_acquire);
+    /*int pendingBank = m_nPendingBankSwitch.exchange(-1, std::memory_order_acquire);
     if (pendingBank >= 0) {
         LOGNOTE("Executing bank switch to %d", pendingBank);
         switchPatchBank(pendingBank);
+    }*/
+
+        uint8_t pendingBank = m_nPendingBankSwitch.load(std::memory_order_acquire);
+    if (pendingBank != 0xFF) { // 0xFF = нет ожидающего переключения
+        unsigned timestamp = m_nBankSwitchTimestamp.load(std::memory_order_acquire);
+        unsigned elapsed = CTimer::GetClockTicks() - timestamp;
+
+        LOGNOTE("Pending bank %d, elapsed: %u us", pendingBank, elapsed);
+        
+        if (elapsed >= BANK_SWITCH_DEBOUNCE_US) {
+            switchPatchBank(pendingBank);
+            m_nPendingBankSwitch.store(0xFF, std::memory_order_release);
+        }
     }
 
     int nRead = m_Serial.Read(m_MIDIBuffer, sizeof(m_MIDIBuffer));
@@ -223,6 +241,7 @@ void CMiniJV880::Process(bool bPlugAndPlayUpdated) {
       m_pMIDIDevice->RegisterRemovedHandler(DeviceRemovedHandler, this);
     }
   }
+    
 }
 
 void CMiniJV880::USBMIDIMessageHandler(unsigned nCable, u8 *pPacket,
@@ -262,9 +281,15 @@ void CMiniJV880::HandleFullMIDIMessage(const uint8_t* pData, uint8_t nLength)
     // ===== Priority 4: Bank Switch (CC 32) =====
     if ((status & 0xF0) == 0xB0 && nLength == 3 && pData[1] == 32) {
       uint8_t bankNum = pData[2] & 0x7F;
+      // Skip patch banks 80 and 81, let them pass through to parser
+      if (bankNum == 80 || bankNum == 81) {
+        // Do nothing, let it fall through
+      } else {
+        // Store bank number and timestamp, but don't switch yet
         m_nPendingBankSwitch.store(bankNum, std::memory_order_release);
-        switchPatchBank(bankNum);
+        m_nBankSwitchTimestamp.store(CTimer::GetClockTicks(), std::memory_order_release);
         return;
+        }
     }
 
     // ===== Priority 5: NVRAM Save Trigger =====
@@ -724,7 +749,6 @@ void CMiniJV880::UnscrambleRom(const uint8_t *src, uint8_t *dst, int len) {
     LOGNOTE("Bank switched to %d", bankNumber);
 }*/
 
-// In initialization method (e.g., constructor or Init):
 void CMiniJV880::InitBankMappings() {
     // Initialize array
     m_bankMappingsCount = 0;
@@ -758,22 +782,16 @@ void CMiniJV880::InitBankMappings() {
 
 void CMiniJV880::ParseAndAddMapping(const char* filename) {
     // Format: XXnvramYY.bin
-    size_t len = strlen(filename);
-    if (len < 12) return;
+    // Minimum length check: "00nvram00.bin" = 13 chars
+    if (strlen(filename) < 13) return;
     
-    // Extract XX (first 2 characters)
+    // Extract XX (first 2 characters must be digits)
     if (!isdigit(filename[0]) || !isdigit(filename[1])) return;
     int bankNumber = (filename[0] - '0') * 10 + (filename[1] - '0');
     
-    // Find "nvram" position
-    const char* nvramPos = strstr(filename, "nvram");
-    if (!nvramPos || strlen(nvramPos) < 7) return;
-    
-    // Extract YY (2 characters after "nvram")
-    const char* yyPos = nvramPos + 5;
-    if (!isdigit(yyPos[0]) || !isdigit(yyPos[1])) return;
-    
-    int yyNumber = (yyPos[0] - '0') * 10 + (yyPos[1] - '0');
+    // Extract YY (chars at position 7 and 8: "XXnvramYY")
+    if (!isdigit(filename[7]) || !isdigit(filename[8])) return;
+    int yyNumber = (filename[7] - '0') * 10 + (filename[8] - '0');
     int romIndex = yyNumber + 6;
     
     // Resize array if needed
@@ -791,8 +809,7 @@ void CMiniJV880::ParseAndAddMapping(const char* filename) {
     m_bankMappings[m_bankMappingsCount].nvramFilename[sizeof(m_bankMappings[m_bankMappingsCount].nvramFilename) - 1] = '\0';
     m_bankMappingsCount++;
     
-    LOGNOTE("Mapped bank %d -> ROM index %d, nvram: %s", 
-            bankNumber, romIndex, filename);
+    //LOGNOTE("Mapped bank %d -> ROM index %d, nvram: %s", bankNumber, romIndex, filename);
 }
 
 void CMiniJV880::switchPatchBank(int bankNumber) {
@@ -809,19 +826,46 @@ void CMiniJV880::switchPatchBank(int bankNumber) {
         }
     }
     
-    // If not found in mapping, use old logic
+    // If not found in mapping, silently return
     if (romIndex == -1) {
-        romIndex = (bankNumber == 0) ? 6 : 6 + bankNumber;
+        return;
     }
     
+    // Check ROM index bounds
     if (romIndex < 0 || (size_t)romIndex >= ROM_COUNT) {
-        LOGERR("Invalid ROM index %d for bank %d", romIndex, bankNumber);
+        LOGERR("ROM index %d out of range for bank %d", romIndex, bankNumber);
         return;
     }
     
     RomInfo& rom = m_romInfos[romIndex];
     
-    if (!rom.isLoaded && !LoadRom(romIndex)) return;
+    // Check if ROM file exists
+    if (rom.filename == nullptr) {
+        LOGERR("ROM file not defined for index %d (bank %d)", romIndex, bankNumber);
+        return;
+    }
+    
+    // Unload previous expansion ROM if it's loaded and different
+    if (m_currentExpansionRomIndex != -1 && 
+        m_currentExpansionRomIndex != romIndex && 
+        (size_t)m_currentExpansionRomIndex < ROM_COUNT) {
+        RomInfo& oldRom = m_romInfos[m_currentExpansionRomIndex];
+        if (oldRom.isLoaded && oldRom.data != nullptr) {
+            delete[] (uint8_t*)oldRom.data;
+            oldRom.data = nullptr;
+            oldRom.isLoaded = false;
+            LOGNOTE("Unloaded previous ROM: %s", oldRom.filename);
+        }
+    }
+    
+    // Update current expansion ROM index
+    m_currentExpansionRomIndex = romIndex;
+    
+    // Try to load ROM if not loaded
+    if (!rom.isLoaded && !LoadRom(romIndex)) {
+        LOGERR("Failed to load ROM %s for bank %d", rom.filename, bankNumber);
+        return;
+    }
    
     // 1. Stop EVERYTHING
     m_bAudioPaused.store(true, std::memory_order_release);

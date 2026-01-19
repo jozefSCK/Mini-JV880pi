@@ -80,6 +80,7 @@ public:
   void InitBankMappings();
   void ParseAndAddMapping(const char* filename);
 
+
   MCU mcu;
 
 private:
@@ -93,14 +94,16 @@ private:
         void* data;
     };
 
-struct BankMapping {
-    int bankNumber;
-    int romIndex;
-    char nvramFilename[16];  // Store nvram filename for loading
-};
+  struct BankMapping {
+      int bankNumber;
+      int romIndex;
+      char nvramFilename[32];  // Store nvram filename for loading
+  };
+
   BankMapping* m_bankMappings;
   unsigned m_bankMappingsCount;
   unsigned m_bankMappingsCapacity;
+  int m_currentExpansionRomIndex; 
 
   static constexpr size_t sz32K = 32 * 1024;
   static constexpr size_t sz128K = 128 * 1024;
@@ -108,8 +111,8 @@ struct BankMapping {
   static constexpr size_t sz2M = 2 * 1024 * 1024;
   static constexpr size_t sz8M = 8 * 1024 * 1024;
 
-  static RomInfo m_romInfos[26];
-  static constexpr size_t ROM_COUNT = 26;
+  static RomInfo m_romInfos[27];
+  static constexpr size_t ROM_COUNT = 27;
 
   CConfig *m_pConfig;
   FATFS *m_pFileSystem;
@@ -133,6 +136,8 @@ struct BankMapping {
   unsigned n_mMCUcycles = 9;
   int m_nNVRAMSaveCounter = 0;
   std::atomic<int> m_nPendingBankSwitch{-1};
+  std::atomic<uint32_t> m_nBankSwitchTimestamp;
+  static constexpr uint32_t BANK_SWITCH_DEBOUNCE_US = 300000; //us 
   std::atomic<bool> m_bAudioPaused{false};
   
 
