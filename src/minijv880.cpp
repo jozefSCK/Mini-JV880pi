@@ -217,7 +217,7 @@ void CMiniJV880::Process(bool bPlugAndPlayUpdated) {
         unsigned timestamp = m_nBankSwitchTimestamp.load(std::memory_order_acquire);
         unsigned elapsed = CTimer::GetClockTicks() - timestamp;
 
-        LOGNOTE("Pending bank %d, elapsed: %u us", pendingBank, elapsed);
+        //LOGNOTE("Pending bank %d, elapsed: %u us", pendingBank, elapsed);
         
         if (elapsed >= BANK_SWITCH_DEBOUNCE_US) {
             switchPatchBank(pendingBank);
@@ -348,7 +348,7 @@ void CMiniJV880::HandleFullMIDIMessage(const uint8_t* pData, uint8_t nLength)
         }
     }
     // add checksum for Roland sysex messages 
-    if (pData[0] == 0xF0 && nLength > 7 && pData[nLength-1] == 0xF7) {
+    if (pData[0] == 0xF0 && nLength < 13 && pData[nLength-1] == 0xF7) {
         if (pData[1] == 0x41) { // Roland
             int chk_idx = nLength - 2;
             if (chk_idx < 6) return; 
@@ -782,16 +782,22 @@ void CMiniJV880::InitBankMappings() {
 
 void CMiniJV880::ParseAndAddMapping(const char* filename) {
     // Format: XXnvramYY.bin
-    // Minimum length check: "00nvram00.bin" = 13 chars
-    if (strlen(filename) < 13) return;
+    size_t len = strlen(filename);
+    if (len < 12) return;
     
-    // Extract XX (first 2 characters must be digits)
+    // Extract XX (first 2 characters)
     if (!isdigit(filename[0]) || !isdigit(filename[1])) return;
     int bankNumber = (filename[0] - '0') * 10 + (filename[1] - '0');
     
-    // Extract YY (chars at position 7 and 8: "XXnvramYY")
-    if (!isdigit(filename[7]) || !isdigit(filename[8])) return;
-    int yyNumber = (filename[7] - '0') * 10 + (filename[8] - '0');
+    // Find "nvram" position
+    const char* nvramPos = strstr(filename, "nvram");
+    if (!nvramPos || strlen(nvramPos) < 7) return;
+    
+    // Extract YY (2 characters after "nvram")
+    const char* yyPos = nvramPos + 5;
+    if (!isdigit(yyPos[0]) || !isdigit(yyPos[1])) return;
+    
+    int yyNumber = (yyPos[0] - '0') * 10 + (yyPos[1] - '0');
     int romIndex = yyNumber + 6;
     
     // Resize array if needed
@@ -809,11 +815,14 @@ void CMiniJV880::ParseAndAddMapping(const char* filename) {
     m_bankMappings[m_bankMappingsCount].nvramFilename[sizeof(m_bankMappings[m_bankMappingsCount].nvramFilename) - 1] = '\0';
     m_bankMappingsCount++;
     
-    //LOGNOTE("Mapped bank %d -> ROM index %d, nvram: %s", bankNumber, romIndex, filename);
+    //LOGNOTE("Mapped bank %d -> ROM index %d, nvram: %s", 
+    //        bankNumber, romIndex, filename);
 }
 
 void CMiniJV880::switchPatchBank(int bankNumber) {
     if (bankNumber < 0 || bankNumber > 99) return;
+    
+    LOGNOTE("=== BANK SWITCH START: bank %d ===", bankNumber);
     
     // Find corresponding romIndex and nvram filename in mapping
     int romIndex = -1;
@@ -828,6 +837,7 @@ void CMiniJV880::switchPatchBank(int bankNumber) {
     
     // If not found in mapping, silently return
     if (romIndex == -1) {
+        LOGNOTE("Bank %d not found in mapping", bankNumber);
         return;
     }
     
@@ -845,31 +855,28 @@ void CMiniJV880::switchPatchBank(int bankNumber) {
         return;
     }
     
-    // Unload previous expansion ROM if it's loaded and different
-    if (m_currentExpansionRomIndex != -1 && 
-        m_currentExpansionRomIndex != romIndex && 
-        (size_t)m_currentExpansionRomIndex < ROM_COUNT) {
-        RomInfo& oldRom = m_romInfos[m_currentExpansionRomIndex];
-        if (oldRom.isLoaded && oldRom.data != nullptr) {
-            delete[] (uint8_t*)oldRom.data;
-            oldRom.data = nullptr;
-            oldRom.isLoaded = false;
-            LOGNOTE("Unloaded previous ROM: %s", oldRom.filename);
-        }
-    }
-    
-    // Update current expansion ROM index
-    m_currentExpansionRomIndex = romIndex;
-    
     // Try to load ROM if not loaded
     if (!rom.isLoaded && !LoadRom(romIndex)) {
         LOGERR("Failed to load ROM %s for bank %d", rom.filename, bankNumber);
         return;
     }
+    
+    // Before pause
+    size_t freeBefore = CMemorySystem::Get()->GetHeapFreeSpace(HEAP_ANY);
+    uint64_t cyclesBefore = mcu.mcu.cycles;
+    LOGNOTE("Before pause: cycles=%llu, free mem=%.2f MB", cyclesBefore, (float)freeBefore/(1024.0f*1024.0f));
    
     // 1. Stop EVERYTHING
     m_bAudioPaused.store(true, std::memory_order_release);
-    CTimer::SimpleMsDelay(100);  // Make sure both cores stopped
+    std::atomic_thread_fence(std::memory_order_seq_cst); // Ensure visible
+    CTimer::SimpleMsDelay(150);  // Increased delay to ensure both cores stopped
+    LOGNOTE("Cores paused");
+
+    // State before reset
+    LOGNOTE("MCU state: ex_ignore=%d, ga_int_enable=%d, sample_write=%llu, sample_read=%llu", 
+            mcu.mcu.ex_ignore, mcu.ga_int_enable, 
+            __atomic_load_n(&sample_write_idx, __ATOMIC_RELAXED),
+            __atomic_load_n(&sample_read_idx, __ATOMIC_RELAXED));
 
     mcu.mcu.ex_ignore = 1;  // Ignore interrupts
     mcu.ga_int_enable = 0;  // Disable interrupts
@@ -877,6 +884,7 @@ void CMiniJV880::switchPatchBank(int bankNumber) {
     
     // 2. Copy ROM
     memcpy(mcu.pcm.waverom_exp, rom.data, EXP_SIZE);
+    LOGNOTE("ROM copied: %s", rom.filename);
     
     // 3. Load NVRAM if mapping exists
     if (nvramFilename != nullptr) {
@@ -891,7 +899,9 @@ void CMiniJV880::switchPatchBank(int bankNumber) {
             f_close(&file);
             
             if (res == FR_OK && bytesRead == sizeof(mcu.nvram)) {
-                LOGNOTE("Loaded NVRAM from %s (%u bytes)", nvramFilename, bytesRead);
+                LOGNOTE("NVRAM loaded from %s (%u bytes), first 4 bytes: %02X %02X %02X %02X", 
+                        nvramFilename, bytesRead,
+                        mcu.nvram[0], mcu.nvram[1], mcu.nvram[2], mcu.nvram[3]);
             } else {
                 LOGERR("Failed to read NVRAM from %s: res=%d, bytes=%u", nvramFilename, res, bytesRead);
             }
@@ -902,17 +912,24 @@ void CMiniJV880::switchPatchBank(int bankNumber) {
     
     // 4. Full reset (clears mcu.mcu.cycles!)
     mcu.SC55_Reset();
+    uint64_t cyclesAfterReset = mcu.mcu.cycles;
+    LOGNOTE("After reset: cycles=%llu", cyclesAfterReset);
     
     // 5. CRITICAL: Zero sample_write_idx AFTER reset
     __atomic_store_n(&sample_write_idx, 0, __ATOMIC_RELEASE);
     __atomic_store_n(&sample_read_idx, 0, __ATOMIC_RELEASE);
     
     std::atomic_thread_fence(std::memory_order_seq_cst);
+    CTimer::SimpleMsDelay(10); // Small delay before resume
     
     // 6. Resume - Core 3 synchronizes automatically
     m_bAudioPaused.store(false, std::memory_order_release);
+    std::atomic_thread_fence(std::memory_order_seq_cst);
+    LOGNOTE("Cores resumed");
     
-    LOGNOTE("Bank switched to %d (ROM index %d: %s)", bankNumber, romIndex, rom.filename);
+    size_t freeAfter = CMemorySystem::Get()->GetHeapFreeSpace(HEAP_ANY);
+    LOGNOTE("=== BANK SWITCH END: ROM index %d (%s), free mem=%.2f MB ===", 
+            romIndex, rom.filename, (float)freeAfter/(1024.0f*1024.0f));
 }
 
 // additional temporary functions 
