@@ -391,8 +391,10 @@ void MCU::MCU_Write(uint32_t address, const uint8_t value) {
       pcm.PCM_Write(address & 0x3f, value);
     else if (address >= 0xff80)
       MCU_DeviceWrite(address & 0x7f, value);
-    else
+    else {
         LOGWARN("Unknown write %x%04x\n", page, address);
+        return;
+    }
   } else if (page == 0 && address >= 0x6196 && address <= 0x6199) 
     {
       return;
@@ -403,8 +405,10 @@ void MCU::MCU_Write(uint32_t address, const uint8_t value) {
     nvram[address & 0x7fff] = value;
   else if (page == 14)
     cardram[address & 0x7fff] = value;
-  else
+  else {
       LOGWARN("Unknown write %x%04x\n", page, address);
+      return;
+  }
 }
 
 void MCU::MCU_Init() { memset(&mcu, 0, sizeof(mcu_t)); }

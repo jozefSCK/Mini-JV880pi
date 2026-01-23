@@ -469,6 +469,7 @@ inline void MCU_PostSample(int *sample32) {
         mcu.br = data & 0xff;
       } else {
         MCU_ErrorTrap();
+        SC55_Reset();
       }
     } else {
       if (reg == 1) {
@@ -485,6 +486,7 @@ inline void MCU_PostSample(int *sample32) {
         mcu.tp = data;
       } else {
         MCU_ErrorTrap();
+        SC55_Reset();
       }
     }
   }
@@ -507,6 +509,7 @@ inline void MCU_PostSample(int *sample32) {
         ;
       } else {
         MCU_ErrorTrap();
+        SC55_Reset();
       }
       ret &= 0xffff;
     } else {
@@ -522,6 +525,7 @@ inline void MCU_PostSample(int *sample32) {
         ret = mcu.tp;
       } else {
         MCU_ErrorTrap();
+        SC55_Reset();
       }
       ret &= 0xff;
     }

@@ -120,6 +120,7 @@ private:
   CUSBMIDIDevice *volatile m_pMIDIDevice = 0;
   CSerialDevice m_Serial;
   uint8_t m_MIDIBuffer[256];
+  uint8_t m_nBankMSB[16] = {0};
   
   int lastEncoderPos = 0;
 
