@@ -254,6 +254,16 @@ void CMiniJV880::HandleFullMIDIMessage(const uint8_t* pData, uint8_t nLength)
 {
     if (nLength == 0) return;
 
+    if (0) { // Log
+        char buf[256];
+        int len = 0;
+        for (int i = 0; i < nLength && len < 250; i++) {
+            len += snprintf(buf + len, sizeof(buf) - len, "%02X ", pData[i]);
+        }
+        if (len) buf[len-1] = 0;
+        LOGNOTE(buf);
+    }   
+
     uint8_t status = pData[0];
 
     // ===== Priority 1: Note On/Off =====
@@ -392,29 +402,14 @@ void CMiniJV880::HandleFullMIDIMessage(const uint8_t* pData, uint8_t nLength)
             memcpy(out, pData, nLength);
             out[chk_idx] = checksum;
 
-            // Log
-            char buf[256];
-            int len = 0;
-            for (int i = 0; i < nLength && len < 250; i++) {
-                len += snprintf(buf + len, sizeof(buf) - len, "%02X ", out[i]);
-            }
-            if (len) buf[len-1] = 0;
-            LOGNOTE(buf);
+            
 
             mcu.postMidiSC55(out, nLength);
             return;
         }
     }
 
-    // ===== All other messages (excluding SysEx) =====
-    // Log
-            char buf1[256];
-            int len1 = 0;
-            for (int i = 0; i < nLength && len1 < 250; i++) {
-                len1 += snprintf(buf1 + len1, sizeof(buf1) - len1, "%02X ", pData[i]);
-            }
-            if (len1) buf1[len1-1] = 0;
-            LOGNOTE(buf1);
+    
     mcu.postMidiSC55(pData, nLength);
 }
 
@@ -750,42 +745,8 @@ void CMiniJV880::UnscrambleRom(const uint8_t *src, uint8_t *dst, int len) {
     }
 }
 
-/*void CMiniJV880::switchPatchBank(int bankNumber) {
-    if (bankNumber < 0 || bankNumber > 19) return;
-    
-    int romIndex = (bankNumber == 0) ? 6 : 6 + bankNumber;
-    RomInfo& rom = m_romInfos[romIndex];
-    
-    if (!rom.isLoaded && !LoadRom(romIndex)) return;
-   
-    // 1. Остановить ВСЁ
-    m_bAudioPaused.store(true, std::memory_order_release);
-    CTimer::SimpleMsDelay(100);  // Убедиться что оба Core остановились
-
-    mcu.mcu.ex_ignore = 1;  // Игнорировать прерывания
-    mcu.ga_int_enable = 0;  // Отключить прерывания
-    mcu.ga_int_trigger = 0; // Очистить триггеры
-    
-    // 2. Копировать ROM
-    memcpy(mcu.pcm.waverom_exp, rom.data, EXP_SIZE);
-    
-    // 3. Полный reset (обнуляет mcu.mcu.cycles!)
-    mcu.SC55_Reset();
-    
-    // 4. КРИТИЧНО: Обнулить sample_write_idx ПОСЛЕ reset
-    __atomic_store_n(&sample_write_idx, 0, __ATOMIC_RELEASE);
-    __atomic_store_n(&sample_read_idx, 0, __ATOMIC_RELEASE);
-    
-    std::atomic_thread_fence(std::memory_order_seq_cst);
-    
-    // 5. Возобновить - Core 3 синхронизируется автоматически
-    m_bAudioPaused.store(false, std::memory_order_release);
-    
-    LOGNOTE("Bank switched to %d", bankNumber);
-}*/
-
-// In initialization method (e.g., constructor or Init):
-void CMiniJV880::InitBankMappings() {
+// Read all patchbank settings on start
+void CMiniJV880::InitBankMappings() { 
     // Initialize array
     m_bankMappingsCount = 0;
     m_bankMappingsCapacity = 32;  // Initial capacity
@@ -892,8 +853,8 @@ void CMiniJV880::switchPatchBank(int bankNumber) {
     }
     
     // Before pause
-    size_t freeBefore = CMemorySystem::Get()->GetHeapFreeSpace(HEAP_ANY);
-    uint64_t cyclesBefore = mcu.mcu.cycles;
+    //size_t freeBefore = CMemorySystem::Get()->GetHeapFreeSpace(HEAP_ANY);
+    //uint64_t cyclesBefore = mcu.mcu.cycles;
     //LOGNOTE("Before pause: cycles=%llu, free mem=%.2f MB", cyclesBefore, (float)freeBefore/(1024.0f*1024.0f));
    
     // 1. Stop EVERYTHING
@@ -942,7 +903,8 @@ void CMiniJV880::switchPatchBank(int bankNumber) {
     
     // 4. Full reset (clears mcu.mcu.cycles!)
     mcu.SC55_Reset();
-    uint64_t cyclesAfterReset = mcu.mcu.cycles;
+    CTimer::SimpleMsDelay(200);
+    //uint64_t cyclesAfterReset = mcu.mcu.cycles;
     //LOGNOTE("After reset: cycles=%llu", cyclesAfterReset);
     
     // 5. CRITICAL: Zero sample_write_idx AFTER reset
@@ -950,14 +912,15 @@ void CMiniJV880::switchPatchBank(int bankNumber) {
     __atomic_store_n(&sample_read_idx, 0, __ATOMIC_RELEASE);
     
     std::atomic_thread_fence(std::memory_order_seq_cst);
-    CTimer::SimpleMsDelay(10); // Small delay before resume
+    CTimer::SimpleMsDelay(50); // Small delay before resume
     
     // 6. Resume - Core 3 synchronizes automatically
     m_bAudioPaused.store(false, std::memory_order_release);
+    CTimer::SimpleMsDelay(20);
     std::atomic_thread_fence(std::memory_order_seq_cst);
     
     size_t freeAfter = CMemorySystem::Get()->GetHeapFreeSpace(HEAP_ANY);
-    LOGNOTE("=== BANK SWITCH END: ROM index %d (%s), free mem=%.2f MB ===", 
+    LOGNOTE("=== BANK SWITCHED TO: %d ROM index %d (%s), free mem=%.2f MB ===", bankNumber, 
             romIndex, rom.filename, (float)freeAfter/(1024.0f*1024.0f));
 }
 

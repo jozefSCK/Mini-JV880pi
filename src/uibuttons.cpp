@@ -256,6 +256,7 @@ CUIButtons::CUIButtons (
 			unsigned enterPin, const char *enterAction,
 			unsigned upPin, const char *upAction,
 			unsigned downPin, const char *downAction,
+			unsigned savenvramPin, const char *savenvramAction,
 			unsigned doubleClickTimeout, unsigned longPressTimeout
 )
 :	m_doubleClickTimeout(doubleClickTimeout),
@@ -276,6 +277,7 @@ CUIButtons::CUIButtons (
 	m_enterPin(enterPin), m_enterAction(CUIButton::triggerTypeFromString(enterAction)),
 	m_upPin(upPin), m_upAction(CUIButton::triggerTypeFromString(upAction)),
 	m_downPin(downPin), m_downAction(CUIButton::triggerTypeFromString(downAction)),
+	m_savenvramPin(savenvramPin), m_savenvramAction(CUIButton::triggerTypeFromString(savenvramAction)),
 	m_eventHandler (0),
 	m_lastTick (0)
 {
@@ -309,14 +311,14 @@ boolean CUIButtons::Initialize (void)
 	unsigned pins[MAX_BUTTONS] = {
 		m_previewPin, m_leftPin, m_rightPin, m_dataPin, m_toneSelectPin,
 		m_patchPerformPin,  m_editPin,  m_systemPin,  m_rhythmPin, 
-		m_utilityPin, m_mutePin, m_monitorPin, m_comparePin, m_enterPin, m_upPin, m_downPin,
+		m_utilityPin, m_mutePin, m_monitorPin, m_comparePin, m_enterPin, m_upPin, m_downPin, m_savenvramPin,
 	};
 	CUIButton::BtnTrigger triggers[MAX_BUTTONS] = {
 		// Normal buttons
 		m_previewAction, m_leftAction, m_rightAction, m_dataAction, m_toneSelectAction,
 		m_patchPerformAction, m_editAction, m_systemAction, m_rhythmAction,
 		m_utilityAction, m_muteAction, m_monitorAction, m_compareAction, m_enterAction,
-		m_upAction, m_downAction,
+		m_upAction, m_downAction, m_savenvramAction,
 	};
 	CUIButton::BtnEvent events[MAX_BUTTONS] = {
 		// Normal buttons
@@ -336,6 +338,7 @@ boolean CUIButtons::Initialize (void)
 		CUIButton::BtnEventEnter,
 		CUIButton::BtnEventUp,
 		CUIButton::BtnEventDown,
+		CUIButton::BtnEventSaveNVRAM,
 	};
 
 	// Setup normal GPIO buttons first

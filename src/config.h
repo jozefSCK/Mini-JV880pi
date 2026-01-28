@@ -124,6 +124,7 @@ public:
 	unsigned GetButtonPinEnter (void) const;
 	unsigned GetButtonPinUp (void) const;
 	unsigned GetButtonPinDown (void) const;
+	unsigned GetButtonPinSaveNVRAM (void) const;
 
 	// Action type for buttons: "click", "doubleclick", "longpress", ""
 	const char *GetButtonActionPreview (void) const;
@@ -142,6 +143,7 @@ public:
 	const char *GetButtonActionEnter (void) const;
 	const char *GetButtonActionUp (void) const;
 	const char *GetButtonActionDown (void) const;
+	const char *GetButtonActionSaveNVRAM (void) const;
 
 	// MIDI buttons navigation
 	unsigned GetMIDIButtonCh   (void) const;
@@ -240,6 +242,7 @@ private:
 	unsigned m_nButtonPinEnter;
 	unsigned m_nButtonPinUp;
 	unsigned m_nButtonPinDown;
+	unsigned m_nButtonPinSaveNVRAM;
 
 	std::string m_ButtonActionPreview;
 	std::string m_ButtonActionLeft;
@@ -257,6 +260,7 @@ private:
 	std::string m_ButtonActionEnter;
 	std::string m_ButtonActionUp;
 	std::string m_ButtonActionDown;
+	std::string m_ButtonActionSaveNVRAM;
 	
 	unsigned m_nMIDIButtonCh;
 	unsigned m_nMIDIButtonPreview;

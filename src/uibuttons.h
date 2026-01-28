@@ -26,7 +26,7 @@
 
 #define BUTTONS_UPDATE_NUM_TICKS 100
 #define DEBOUNCE_TIME 20
-#define MAX_GPIO_BUTTONS 17  // 16 UI buttons
+#define MAX_GPIO_BUTTONS 18  // 16 UI buttons + Save NVRAM
 #define MAX_BUTTONS (MAX_GPIO_BUTTONS)
 
 class CUIButtons;
@@ -64,6 +64,7 @@ public:
 		BtnEventUp = 16,
 		BtnEventDown = 17,
 		BtnEventRelease = 18,
+		BtnEventSaveNVRAM = 19
 	};
 	
 	CUIButton (void);
@@ -133,6 +134,7 @@ public:
 			unsigned enterPin, const char *enterAction,
 			unsigned upPin, const char *upAction,
 			unsigned downPin, const char *downAction,
+			unsigned savenvramPin, const char *savenvramAction,
 			unsigned doubleClickTimeout, unsigned longPressTimeout
 	);
 	~CUIButtons (void);
@@ -187,6 +189,8 @@ private:
 	CUIButton::BtnTrigger m_upAction;
 	unsigned m_downPin;
 	CUIButton::BtnTrigger m_downAction;
+	unsigned m_savenvramPin;
+	CUIButton::BtnTrigger m_savenvramAction;
 
 	BtnEventHandler *m_eventHandler;
 	void *m_eventParam;

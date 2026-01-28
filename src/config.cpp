@@ -106,6 +106,7 @@ void CConfig::Load (void)
 	m_nButtonPinEnter = m_Properties.GetNumber ("ButtonPinEnter", 11);
 	m_nButtonPinUp = m_Properties.GetNumber ("ButtonPinUp", 0);
 	m_nButtonPinDown = m_Properties.GetNumber ("ButtonPinDown", 0);
+	m_nButtonPinSaveNVRAM = m_Properties.GetNumber ("ButtonPinSaveNVRAM", 0);
 
 	m_ButtonActionPreview = m_Properties.GetString ("ButtonActionPreview", "");
 	m_ButtonActionLeft = m_Properties.GetString ("ButtonActionLeft", "");
@@ -123,6 +124,7 @@ void CConfig::Load (void)
 	m_ButtonActionEnter = m_Properties.GetString("ButtonActionEnter", "click");
 	m_ButtonActionUp = m_Properties.GetString("ButtonActionUp", "click");
 	m_ButtonActionDown = m_Properties.GetString("ButtonActionDown", "click");
+	m_ButtonActionSaveNVRAM = m_Properties.GetString("ButtonActionSaveNVRAM", "click");
 
 	// MIDI buttons
 	m_nMIDIButtonCh = m_Properties.GetNumber ("MIDIButtonCh", 0);
@@ -414,6 +416,11 @@ unsigned CConfig::GetButtonPinDown (void) const
 	return m_nButtonPinDown;
 }
 
+unsigned CConfig::GetButtonPinSaveNVRAM (void) const
+{
+	return m_nButtonPinSaveNVRAM;
+}
+
 const char *CConfig::GetButtonActionPreview (void) const
 {
 	return m_ButtonActionPreview.c_str();
@@ -492,6 +499,11 @@ const char *CConfig::GetButtonActionUp (void) const
 const char *CConfig::GetButtonActionDown (void) const
 {
 	return m_ButtonActionDown.c_str();
+}
+
+const char *CConfig::GetButtonActionSaveNVRAM (void) const
+{
+	return m_ButtonActionSaveNVRAM.c_str();
 }
 
 unsigned CConfig::GetMIDIButtonCh (void) const
