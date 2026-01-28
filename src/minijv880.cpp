@@ -524,6 +524,9 @@ void CMiniJV880::Run(unsigned nCore) {
                 // 2) if no samples ready, run bounded MCU burst to allow producer to progress
                 int instr = 0;
                 while (instr < MCU_INSTR_BURST) {
+                    if (m_bAudioPaused.load(std::memory_order_acquire)) {
+                        break; // Exit MCU burst immediately
+                    }
                     if (!mcu.mcu.ex_ignore)
                         mcu.MCU_Interrupt_Handle();
                     else
@@ -903,7 +906,7 @@ void CMiniJV880::switchPatchBank(int bankNumber) {
     
     // 4. Full reset (clears mcu.mcu.cycles!)
     mcu.SC55_Reset();
-    CTimer::SimpleMsDelay(200);
+    CTimer::SimpleMsDelay(300);
     //uint64_t cyclesAfterReset = mcu.mcu.cycles;
     //LOGNOTE("After reset: cycles=%llu", cyclesAfterReset);
     
