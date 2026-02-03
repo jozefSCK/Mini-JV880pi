@@ -30,10 +30,17 @@
 #include <circle/sound/i2ssoundbasedevice.h>
 #include <circle/sound/pwmsoundbasedevice.h>
 #include <circle/usb/usbmidihost.h>
+#include <circle/net/syslogdaemon.h>
+#include <circle/net/ipaddress.h>
 #include <stdio.h>
 #include <string.h>
 #include <cstring>   // memcpy / memmove
 #include <algorithm>
+
+const char WLANFirmwarePath[] = "SD:firmware/";
+const char WLANConfigFile[]   = "SD:wpa_supplicant.conf";
+#define FTPUSERNAME "admin"
+#define FTPPASSWORD "admin"
 
 LOGMODULE("minijv880");
 
@@ -80,6 +87,14 @@ CMiniJV880::CMiniJV880(CConfig *pConfig, CInterruptSystem *pInterrupt,
       screenUnbuffered(mScreenUnbuffered),
       m_bChannelsSwapped(pConfig->GetChannelsSwapped()),
       m_UI(this, pGPIOManager, pI2CMaster, pSPIMaster, pConfig),
+      m_pNet(nullptr),
+        m_pNetDevice(nullptr),
+        m_WLAN(nullptr),
+        m_WPASupplicant(nullptr),
+        m_bNetworkReady(false),
+        m_bNetworkInit(false),
+        m_UDPMIDI(nullptr),
+        m_pmDNSPublisher (nullptr),
       m_lastTick(0),
       m_lastTick1(0) {
 
@@ -122,6 +137,15 @@ CMiniJV880::CMiniJV880(CConfig *pConfig, CInterruptSystem *pInterrupt,
   }
   
 };
+
+CMiniJV880::~CMiniJV880 ()
+{
+	delete m_WLAN;
+	delete m_WPASupplicant;
+	delete m_UDPMIDI;
+	delete m_pFTPDaemon;
+	delete m_pmDNSPublisher;
+}
 
 bool CMiniJV880::Initialize(void) {
   assert(m_pConfig);
@@ -196,6 +220,7 @@ bool CMiniJV880::Initialize(void) {
   m_pSoundDevice->Start();
 
   CMultiCoreSupport::Initialize();
+  InitNetwork();
   LOGNOTE("initialised");
   size_t freeMemory = CMemorySystem::Get()->GetHeapFreeSpace(HEAP_ANY);
   LOGNOTE("Free memory: %u bytes (%.2f MB)", freeMemory, (float)freeMemory / (1024.0f * 1024.0f));
@@ -241,6 +266,9 @@ void CMiniJV880::Process(bool bPlugAndPlayUpdated) {
       m_pMIDIDevice->RegisterRemovedHandler(DeviceRemovedHandler, this);
     }
   }
+  if (m_pNet) {
+		UpdateNetwork();
+	}
     
 }
 
@@ -940,4 +968,226 @@ return;
                                 mcu.mcu.cycles, sample_write_idx,
                                 mcu.mcu.sleep, mcu.mcu.ex_ignore);
  return;
+}
+
+void CMiniJV880::UpdateNetwork()
+{
+	if (!m_pNet) {
+		LOGNOTE("CMiniJV880::UpdateNetwork: m_pNet is nullptr, returning early");
+		return;
+	}
+
+	bool bNetIsRunning = m_pNet->IsRunning();
+	if (m_pNetDevice->GetType() == NetDeviceTypeEthernet)
+		bNetIsRunning &= m_pNetDevice->IsLinkUp();
+	else if (m_pNetDevice->GetType() == NetDeviceTypeWLAN)
+		bNetIsRunning &= (m_WPASupplicant && m_WPASupplicant->IsConnected());
+	
+	if (!m_bNetworkInit && bNetIsRunning)
+	{
+		LOGNOTE("CMiniJV880::UpdateNetwork: Network became ready, initializing network services");
+		m_bNetworkInit = true;
+		CString IPString;
+		m_pNet->GetConfig()->GetIPAddress()->Format(&IPString);
+
+		if (m_UDPMIDI)
+		{
+			m_UDPMIDI->Initialize();
+		}
+
+		if (m_pConfig->GetNetworkFTPEnabled()) {
+			m_pFTPDaemon = new CFTPDaemon(FTPUSERNAME, FTPPASSWORD, m_pmDNSPublisher, m_pConfig);
+
+			if (!m_pFTPDaemon->Initialize())
+			{
+				LOGERR("Failed to init FTP daemon");
+				delete m_pFTPDaemon;
+				m_pFTPDaemon = nullptr;
+			}
+			else 
+			{
+				LOGNOTE("FTP daemon initialized");
+			}
+		} else {
+			LOGNOTE("FTP daemon not started (NetworkFTPEnabled=0)");
+		}
+        m_UI.LCDMessage("IP Address:\n%s", IPString);
+
+		m_pmDNSPublisher = new CmDNSPublisher (m_pNet);
+		assert (m_pmDNSPublisher);
+		
+		if (!m_pmDNSPublisher->PublishService (m_pConfig->GetNetworkHostname(), CmDNSPublisher::ServiceTypeAppleMIDI,
+						     5004))
+		{
+			LOGPANIC ("Cannot publish mdns service");
+		}
+
+		static constexpr const char *ServiceTypeFTP = "_ftp._tcp";
+		static const char *ftpTxt[] = { "app=MiniDexed", nullptr };
+		if (!m_pmDNSPublisher->PublishService (m_pConfig->GetNetworkHostname(), ServiceTypeFTP, 21, ftpTxt))
+		{
+			LOGPANIC ("Cannot publish mdns service");
+		}
+
+		if (m_pConfig->GetSyslogEnabled())
+		{
+			LOGNOTE ("Syslog server is enabled in configuration");
+			const CIPAddress& ServerIP = m_pConfig->GetNetworkSyslogServerIPAddress();
+			if (ServerIP.IsSet () && !ServerIP.IsNull ())
+			{
+				static const u16 usServerPort = 8514;
+				CString IPString;
+				ServerIP.Format (&IPString);
+				LOGNOTE ("Sending log messages to syslog server %s:%u",
+					(const char *) IPString, (unsigned) usServerPort);
+
+				new CSysLogDaemon (m_pNet, ServerIP, usServerPort);
+			}
+			else
+			{
+				LOGNOTE ("Syslog server IP not set");
+			}	
+		}
+		else
+		{
+			LOGNOTE ("Syslog server is not enabled in configuration");
+		}
+		m_bNetworkReady = true;
+	}
+
+	if (m_bNetworkReady && !bNetIsRunning)
+	{
+		LOGNOTE("CMiniJV880::UpdateNetwork: Network disconnected");
+		m_bNetworkReady = false;
+		m_pmDNSPublisher->UnpublishService (m_pConfig->GetNetworkHostname());
+		LOGNOTE("Network disconnected.");
+	}
+	else if (!m_bNetworkReady && bNetIsRunning)
+	{
+		LOGNOTE("CMiniJV880::UpdateNetwork: Network connection reestablished");
+		m_bNetworkReady = true;
+		
+		if (!m_pmDNSPublisher->PublishService (m_pConfig->GetNetworkHostname(), CmDNSPublisher::ServiceTypeAppleMIDI,
+						     5004))
+		{
+			LOGPANIC ("Cannot publish mdns service");
+		}
+
+		static constexpr const char *ServiceTypeFTP = "_ftp._tcp";
+		static const char *ftpTxt[] = { "app=MiniDexed", nullptr };
+		if (!m_pmDNSPublisher->PublishService (m_pConfig->GetNetworkHostname(), ServiceTypeFTP, 21, ftpTxt))
+		{
+			LOGPANIC ("Cannot publish mdns service");
+		}
+		
+		m_bNetworkReady = true;
+		
+		LOGNOTE("Network connection reestablished.");
+
+	}
+}
+
+bool CMiniJV880::InitNetwork()
+{
+	LOGNOTE("CMiniJV880::InitNetwork called");
+	assert(m_pNet == nullptr);
+
+	TNetDeviceType NetDeviceType = NetDeviceTypeUnknown;
+
+	if (m_pConfig->GetNetworkEnabled())
+	{
+		LOGNOTE("CMiniJV880::InitNetwork: Network is enabled in configuration");
+
+		LOGNOTE("CMiniJV880::InitNetwork: Network type set in configuration: %s", m_pConfig->GetNetworkType());
+
+		if (strcmp(m_pConfig->GetNetworkType(), "wlan") == 0)
+		{
+			LOGNOTE("CMiniJV880::InitNetwork: Initializing WLAN");
+			NetDeviceType = NetDeviceTypeWLAN;
+			m_WLAN = new CBcm4343Device(WLANFirmwarePath);
+			if (m_WLAN && m_WLAN->Initialize())
+			{
+				LOGNOTE("CMiniJV880::InitNetwork: WLAN initialized");
+			}
+			else
+			{
+				LOGERR("CMiniJV880::InitNetwork: Failed to initialize WLAN, maybe firmware files are missing?");
+				delete m_WLAN; m_WLAN = nullptr;
+				return false;
+			}
+		}
+		else if (strcmp(m_pConfig->GetNetworkType(), "ethernet") == 0)
+		{
+			LOGNOTE("CMiniJV880::InitNetwork: Initializing Ethernet");
+			NetDeviceType = NetDeviceTypeEthernet;
+		}
+		else 
+		{
+			LOGERR("CMiniJV880::InitNetwork: Network type is not set, please check your minidexed configuration file.");
+			NetDeviceType = NetDeviceTypeUnknown;
+		}
+		
+		if (NetDeviceType != NetDeviceTypeUnknown)
+		{
+			if (m_pConfig->GetNetworkDHCP())
+			{
+				LOGNOTE("CMiniJV880::InitNetwork: Creating CNetSubSystem with DHCP (Hostname: %s)", m_pConfig->GetNetworkHostname());
+				m_pNet = new CNetSubSystem(0, 0, 0, 0, m_pConfig->GetNetworkHostname(), NetDeviceType);
+			}
+			else if (m_pConfig->GetNetworkIPAddress().IsSet() && m_pConfig->GetNetworkSubnetMask().IsSet())
+			{
+				CString IPString, SubnetString;
+				m_pConfig->GetNetworkIPAddress().Format (&IPString);
+				m_pConfig->GetNetworkSubnetMask().Format (&SubnetString);
+				LOGNOTE("CMiniJV880::InitNetwork: Creating CNetSubSystem with IP: %s / %s", (const char*)IPString, (const char*)SubnetString);
+				m_pNet = new CNetSubSystem(
+					m_pConfig->GetNetworkIPAddress().Get(),
+					m_pConfig->GetNetworkSubnetMask().Get(),
+					m_pConfig->GetNetworkDefaultGateway().IsSet() ? m_pConfig->GetNetworkDefaultGateway().Get() : 0,
+					m_pConfig->GetNetworkDNSServer().IsSet() ? m_pConfig->GetNetworkDNSServer().Get() : 0,
+					m_pConfig->GetNetworkHostname(),
+					NetDeviceType);
+			}
+			else
+			{
+				LOGNOTE ("CMiniJV880::InitNetwork: Neither DHCP nor IP address/subnet mask is set, using DHCP (Hostname: %s)", m_pConfig->GetNetworkHostname());
+				m_pNet = new CNetSubSystem(0, 0, 0, 0, m_pConfig->GetNetworkHostname(), NetDeviceType);
+			}
+
+			if (!m_pNet || !m_pNet->Initialize(false)) // Check if m_pNet allocation succeeded
+			{
+				LOGERR("CMiniJV880::InitNetwork: Failed to initialize network subsystem");
+				delete m_pNet; m_pNet = nullptr; // Clean up if failed
+				delete m_WLAN; m_WLAN = nullptr; // Clean up WLAN if allocated
+				return false; // Return false as network init failed
+			}
+			// WPASupplicant needs to be started after netdevice available
+			if (NetDeviceType == NetDeviceTypeWLAN)
+			{
+				LOGNOTE("CMiniJV880::InitNetwork: Initializing WPASupplicant");
+				m_WPASupplicant = new CWPASupplicant(WLANConfigFile); // Allocate m_WPASupplicant
+				if (!m_WPASupplicant || !m_WPASupplicant->Initialize()) 
+				{
+					LOGERR("CMiniJV880::InitNetwork: Failed to initialize WPASupplicant, maybe wlan config is missing?"); 
+					delete m_WPASupplicant; m_WPASupplicant = nullptr; // Clean up if failed
+					// Continue without supplicant? Or return false? Decided to continue for now.
+				}
+			}
+			m_pNetDevice = CNetDevice::GetNetDevice(NetDeviceType);
+
+			// Allocate UDP MIDI device now that network might be up
+			m_UDPMIDI = new CUDPMIDIDevice(this, m_pConfig); // Allocate m_UDPMIDI
+			if (!m_UDPMIDI) {
+				LOGERR("CMiniJV880::InitNetwork: Failed to allocate UDP MIDI device");
+				// Clean up other network resources if needed, or handle error appropriately
+			} 
+		}
+		LOGNOTE("CMiniJV880::InitNetwork: returning %d", m_pNet != nullptr);
+		return m_pNet != nullptr;
+	}
+	else
+	{
+		LOGNOTE("CMiniJV880::InitNetwork: Network is not enabled in configuration");
+		return false;
+	}
 }

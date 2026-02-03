@@ -154,6 +154,21 @@ void CConfig::Load (void)
 	m_nEncoderPinData = m_Properties.GetNumber ("EncoderPinData", 9);
 
 	m_bProfileEnabled = m_Properties.GetNumber ("ProfileEnabled", 0) != 0;
+
+	// Network
+	m_bNetworkEnabled  = m_Properties.GetNumber ("NetworkEnabled", 0) != 0;
+	m_bNetworkDHCP  = m_Properties.GetNumber ("NetworkDHCP", 0) != 0;
+	m_NetworkType = m_Properties.GetString ("NetworkType", "wlan");
+	m_NetworkHostname = m_Properties.GetString ("NetworkHostname", "MiniJV880");
+	if (const u8 *pIP = m_Properties.GetIPAddress("NetworkIPAddress")) m_INetworkIPAddress.Set (pIP);
+	if (const u8 *pIP = m_Properties.GetIPAddress("NetworkSubnetMask")) m_INetworkSubnetMask.Set (pIP);
+	if (const u8 *pIP = m_Properties.GetIPAddress("NetworkDefaultGateway")) m_INetworkDefaultGateway.Set (pIP);
+	m_bSyslogEnabled  = m_Properties.GetNumber ("NetworkSyslogEnabled", 0) != 0;
+	if (const u8 *pIP = m_Properties.GetIPAddress("NetworkDNSServer")) m_INetworkDNSServer.Set (pIP);
+	m_bNetworkFTPEnabled = m_Properties.GetNumber("NetworkFTPEnabled", 0) != 0;
+	if (const u8 *pIP = m_Properties.GetIPAddress ("NetworkSyslogServerIPAddress")) m_INetworkSyslogServerIPAddress.Set (pIP);
+	m_bUDPMIDIEnabled = m_Properties.GetNumber("UDPMIDIEnabled", 0) != 0;
+	if (const u8 *pIP = m_Properties.GetIPAddress("UDPMIDIIPAddress")) m_IUDPMIDIIPAddress.Set (pIP);
 }
 
 unsigned CConfig::GetMCUcycles (void) const
@@ -624,4 +639,70 @@ unsigned CConfig::GetLongPressTimeout (void) const
 bool CConfig::GetProfileEnabled (void) const
 {
 	return m_bProfileEnabled;
+}
+
+// Network
+bool CConfig::GetNetworkEnabled (void) const
+{
+	return m_bNetworkEnabled;
+}
+
+bool CConfig::GetNetworkDHCP (void) const
+{
+	return m_bNetworkDHCP;
+}
+
+const char *CConfig::GetNetworkType (void) const
+{
+	return m_NetworkType.c_str();
+}
+
+const char *CConfig::GetNetworkHostname (void) const
+{
+	return m_NetworkHostname.c_str();
+}
+
+const CIPAddress& CConfig::GetNetworkIPAddress (void) const
+{	
+	return m_INetworkIPAddress;
+}
+
+const CIPAddress& CConfig::GetNetworkSubnetMask (void) const
+{
+	return m_INetworkSubnetMask;
+}
+
+const CIPAddress& CConfig::GetNetworkDefaultGateway (void) const
+{
+	return m_INetworkDefaultGateway;
+}
+
+const CIPAddress& CConfig::GetNetworkDNSServer (void) const
+{
+	return m_INetworkDNSServer;
+}
+
+bool CConfig::GetSyslogEnabled (void) const
+{
+	return m_bSyslogEnabled;
+}
+
+const CIPAddress& CConfig::GetNetworkSyslogServerIPAddress (void) const
+{
+	return m_INetworkSyslogServerIPAddress;
+}
+
+bool CConfig::GetNetworkFTPEnabled (void) const
+{
+	return m_bNetworkFTPEnabled;
+}
+
+bool CConfig::GetUDPMIDIEnabled (void) const
+{
+	return m_bUDPMIDIEnabled;
+}
+
+const CIPAddress& CConfig::GetUDPMIDIIPAddress (void) const
+{
+	return m_IUDPMIDIIPAddress;
 }

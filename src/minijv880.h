@@ -37,7 +37,11 @@
 #include <circle/spimaster.h>
 #include <circle/spinlock.h>
 #include <circle/types.h>
-// #include <circle/usb/usbkompletekontrol.h>
+#include <wlan/bcm4343.h>
+#include <wlan/hostap/wpa_supplicant/wpasupplicant.h>
+#include "net/mdnspublisher.h"
+#include "udpmididevice.h"
+#include "net/ftpdaemon.h"
 #include <circle/usb/usbmidi.h>
 #include <fatfs/ff.h>
 #include <stdint.h>
@@ -49,6 +53,7 @@ public:
   CMiniJV880(CConfig *pConfig, CInterruptSystem *pInterrupt,
              CGPIOManager *pGPIOManager, CI2CMaster *pI2CMaster, CSPIMaster *pSPIMaster,
              FATFS *pFileSystem, CScreenDevice *mScreenUnbuffered);
+  ~CMiniJV880(void);
 
   bool Initialize(void);
   void Process(bool bPlugAndPlayUpdated);
@@ -79,6 +84,8 @@ public:
   void switchPatchBank(int bankNumber);
   void InitBankMappings();
   void ParseAndAddMapping(const char* filename);
+  bool InitNetwork();
+	void UpdateNetwork();
 
 
   MCU mcu;
@@ -129,6 +136,17 @@ private:
   bool m_bChannelsSwapped;
   unsigned m_nQueueSizeFrames;
   CUserInterface m_UI;
+  
+  // Network
+	CNetSubSystem* m_pNet;
+	CNetDevice* m_pNetDevice;
+	CBcm4343Device* m_WLAN; // Changed to pointer
+	CWPASupplicant* m_WPASupplicant; // Changed to pointer
+	bool m_bNetworkReady;
+	bool m_bNetworkInit;
+	CUDPMIDIDevice* m_UDPMIDI; // Changed to pointer
+	CFTPDaemon* m_pFTPDaemon;
+	CmDNSPublisher *m_pmDNSPublisher;
 
   unsigned m_lastTick;
   unsigned m_lastTick1;

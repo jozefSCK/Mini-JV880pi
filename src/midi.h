@@ -31,6 +31,7 @@ public:
     void FeedSerialByte(uint8_t b);
     void FeedSerialBytes(const uint8_t* data, unsigned len);  // <<<<< ДОБАВИТЬ
     void FeedUSBMIDIPacket(uint8_t* data, unsigned len);
+    void HandleFullMIDIMessage(const uint8_t* data, unsigned len);
 
 private:
     void ResetParser();

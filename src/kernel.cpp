@@ -24,6 +24,8 @@
 #include <assert.h>
 #include <circle/usb/usbhcidevice.h>
 
+#define NET_DEVICE_TYPE		NetDeviceTypeWLAN		// or: NetDeviceTypeWLAN
+
 LOGMODULE ("kernel");
 
 CKernel *CKernel::s_pThis = 0;

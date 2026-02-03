@@ -8,7 +8,8 @@ CIRCLE_STDLIB_DIR = ../circle-stdlib
 CMSIS_DIR = ../CMSIS_5/CMSIS
 
 OBJS = main.o kernel.o minijv880.o config.o userinterface.o uibuttons.o midi.o \
-       emulator/lcd.o emulator/mcu.o emulator/mcu_opcodes.o emulator/pcm.o drivers/ssd1306device24.o
+       emulator/lcd.o emulator/mcu.o emulator/mcu_opcodes.o emulator/pcm.o drivers/ssd1306device24.o \
+       net/ftpdaemon.o net/ftpworker.o net/applemidi.o net/udpmidi.o net/mdnspublisher.o udpmididevice.o
 
 OPTIMIZE = -O3
 
