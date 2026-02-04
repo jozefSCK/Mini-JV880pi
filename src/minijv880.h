@@ -138,15 +138,15 @@ private:
   CUserInterface m_UI;
   
   // Network
-	CNetSubSystem* m_pNet;
-	CNetDevice* m_pNetDevice;
-	CBcm4343Device* m_WLAN; // Changed to pointer
-	CWPASupplicant* m_WPASupplicant; // Changed to pointer
+	CNetSubSystem* m_Net;
+	CNetDevice* m_NetDevice;
+	CBcm4343Device* m_WLAN; 
+	CWPASupplicant* m_WPASupplicant; 
 	bool m_bNetworkReady;
 	bool m_bNetworkInit;
-	CUDPMIDIDevice* m_UDPMIDI; // Changed to pointer
+	CUDPMIDIDevice* m_UDPMIDI; 
 	CFTPDaemon* m_pFTPDaemon;
-	CmDNSPublisher *m_pmDNSPublisher;
+	CmDNSPublisher *m_pMDNSPublisher;
 
   unsigned m_lastTick;
   unsigned m_lastTick1;
