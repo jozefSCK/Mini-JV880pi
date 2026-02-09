@@ -9,6 +9,7 @@ CMSIS_DIR = ../CMSIS_5/CMSIS
 
 # Network objects
 NET_OBJS = \
+    udpmididevice.o \
     net/applemidi.o \
     net/udpmidi.o \
     net/ftpdaemon.o \

@@ -26,6 +26,7 @@
 #include <circle/i2cmaster.h>
 #include <circle/spimaster.h>
 #include <circle/usb/usbcontroller.h>
+#include <circle/sched/scheduler.h>
 #include "config.h"
 #include "minijv880.h"
 
@@ -59,6 +60,7 @@ private:
 	CCPUThrottle	m_CPUThrottle;
 	CMiniJV880	*m_pJV880;
 	CUSBController *m_pUSB;
+	CScheduler	m_Scheduler;
 
 	static CKernel *s_pThis;
 };
