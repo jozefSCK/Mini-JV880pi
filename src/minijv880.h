@@ -139,16 +139,16 @@ private:
   unsigned m_nQueueSizeFrames;
   CUserInterface m_UI;
   
-  // Network
-	CNetSubSystem* m_Net;
-	CNetDevice* m_NetDevice;
-	CBcm4343Device* m_WLAN; 
-	CWPASupplicant* m_WPASupplicant; 
+	// Network
+	CNetSubSystem* m_pNet;
+	CNetDevice* m_pNetDevice;
+	CBcm4343Device* m_WLAN; // Changed to pointer
+	CWPASupplicant* m_WPASupplicant; // Changed to pointer
 	bool m_bNetworkReady;
 	bool m_bNetworkInit;
-	CUDPMIDIDevice* m_UDPMIDI; 
+	CUDPMIDIDevice* m_UDPMIDI; // Changed to pointer
 	CFTPDaemon* m_pFTPDaemon;
-	CmDNSPublisher *m_pMDNSPublisher;
+	CmDNSPublisher *m_pmDNSPublisher;
 
   unsigned m_lastTick;
   unsigned m_lastTick1;
