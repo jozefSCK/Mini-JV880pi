@@ -37,14 +37,16 @@
 #include <cstring>   // memcpy / memmove
 #include <algorithm>
 
-const char WLANFirmwarePath[] = "SD:firmware/";
-const char WLANConfigFile[]   = "SD:wpa_supplicant.conf";
+const char WLANFirmwarePath[] = "SD:/firmware/";
+const char WLANConfigFile[]   = "SD:/wpa_supplicant.conf";
 #define FTPUSERNAME "admin"
 #define FTPPASSWORD "admin"
 
 LOGMODULE("minijv880");
 
 CMiniJV880 *CMiniJV880::s_pThis = 0;
+
+uint16_t cnt = 0;
 
 CMiniJV880::RomInfo CMiniJV880::m_romInfos[27] = {
     m_romInfos[0] = {sz32K, "jv880_nvram.bin", false, false, false, nullptr},
@@ -998,18 +1000,23 @@ return;
 
 void CMiniJV880::UpdateNetwork()
 {
-    
+
 	if (!m_pNet) {
 		LOGNOTE("CMiniJV880::UpdateNetwork: m_pNet is nullptr, returning early");
 		return;
 	}
 
+    
 	bool bNetIsRunning = m_pNet->IsRunning();
     //LOGNOTE("Update network running:%d, Init:%d, mpNet:%d",bNetIsRunning, m_bNetworkInit, m_pNet );
 	if (m_pNetDevice->GetType() == NetDeviceTypeEthernet)
 		bNetIsRunning &= m_pNetDevice->IsLinkUp();
-	else if (m_pNetDevice->GetType() == NetDeviceTypeWLAN)
+	else if (m_pNetDevice->GetType() == NetDeviceTypeWLAN) {
 		bNetIsRunning &= (m_WPASupplicant && m_WPASupplicant->IsConnected());
+    }
+
+    cnt++;
+	if ((cnt & 4095) == 4095) LOGNOTE("Update network running:%d, Init:%d, mpNet:%d, wpa:%d",bNetIsRunning, m_bNetworkInit, m_pNet, m_WPASupplicant->IsConnected() );
 	
 
 	if (!m_bNetworkInit && bNetIsRunning)
@@ -1132,6 +1139,8 @@ bool CMiniJV880::InitNetwork()
 
 		if (strcmp(m_pConfig->GetNetworkType(), "wlan") == 0)
 		{
+            LOGNOTE("NetDeviceType == NetDeviceTypeWLAN: TRUE");  // ADD THIS!
+            LOGNOTE("WLANConfigFile path: %s", WLANConfigFile);
 			LOGNOTE("CMiniJV880::InitNetwork: Initializing WLAN");
 			NetDeviceType = NetDeviceTypeWLAN;
 			m_WLAN = new CBcm4343Device(WLANFirmwarePath);
@@ -1180,21 +1189,41 @@ bool CMiniJV880::InitNetwork()
 				delete m_pNet; m_pNet = nullptr; // Clean up if failed
 				delete m_WLAN; m_WLAN = nullptr; // Clean up WLAN if allocated
 				return false; // Return false as network init failed
-			}
+			} else {
+                CTimer::Get()->MsDelay(1000);
+                LOGNOTE("m_pNet->IsRunning() = %d", m_pNet->IsRunning());
+            }
 			// WPASupplicant needs to be started after netdevice available
 			if (NetDeviceType == NetDeviceTypeWLAN)
 			{
 				LOGNOTE("CMiniJV880::InitNetwork: Initializing WPASupplicant");
+                LOGNOTE("Creating WPASupplicant with config: %s", WLANConfigFile);
 				m_WPASupplicant = new CWPASupplicant(WLANConfigFile); // Allocate m_WPASupplicant
-				if (!m_WPASupplicant || !m_WPASupplicant->Initialize()) 
+				if (!m_WPASupplicant) {
+                    LOGERR("Failed to allocate WPASupplicant!");
+                } else {
+                    LOGNOTE("WPASupplicant allocated: %p", m_WPASupplicant);
+                    
+                    if (!m_WPASupplicant->Initialize()) {
+                        LOGERR("WPASupplicant Initialize() failed!");
+                    } else {
+                        LOGNOTE("WPASupplicant Initialize() succeeded!");
+                    }
+                }
+
+                /*if (!m_WPASupplicant || !m_WPASupplicant->Initialize()) 
 				{
 					LOGERR("CMiniJV880::InitNetwork: Failed to initialize WPASupplicant, maybe wlan config is missing?"); 
 					delete m_WPASupplicant; m_WPASupplicant = nullptr; // Clean up if failed
 					// Continue without supplicant? Or return false? Decided to continue for now.
-				}
+				}*/
 			}
 			m_pNetDevice = CNetDevice::GetNetDevice(NetDeviceType);
-            LOGNOTE("NetDevice %d", m_pNetDevice);
+            LOGNOTE("m_pNetDevice = %p, type = %d", m_pNetDevice, NetDeviceType);
+
+            if (m_pNetDevice) {
+            LOGNOTE("NetDevice type: %d", m_pNetDevice->GetType());
+            }   
 
 			// Allocate UDP MIDI device now that network might be up
 			m_UDPMIDI = new CUDPMIDIDevice(this, m_pConfig); // Allocate m_UDPMIDI
@@ -1203,7 +1232,7 @@ bool CMiniJV880::InitNetwork()
 				// Clean up other network resources if needed, or handle error appropriately
 			} 
 		}
-		LOGNOTE("CMiniJV880::InitNetwork: returning %d", m_pNet != nullptr);
+		LOGNOTE("CMiniJV880::InitNetwork: returning %d", m_pNet);
 		return m_pNet != nullptr;
 	}
 	else

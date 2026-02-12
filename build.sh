@@ -82,7 +82,12 @@ cat > src/version.h << EOF
 EOF
 
 cd src
-make clean || true
+make clean
+echo "***** DEBUG *****"
+env
+rm -rf ./gcc-* || true
+grep -r 'aarch64-none-elf' . || true
+find . -type d -name 'aarch64-none-elf' || true
 make -j
 ls *.img
 cd ..

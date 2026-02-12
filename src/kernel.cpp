@@ -24,7 +24,7 @@
 #include <assert.h>
 #include <circle/usb/usbhcidevice.h>
 
-#define NET_DEVICE_TYPE		NetDeviceTypeWLAN		// or: NetDeviceTypeWLAN
+#define NET_DEVICE_TYPE	NetDeviceTypeWLAN		// or: NetDeviceTypeWLAN
 
 LOGMODULE ("kernel");
 
