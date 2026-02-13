@@ -9,6 +9,7 @@ Changed .bin loader
 Added save NVRAM via MIDI command (check .ini)
 Added calculation checksum to Roland sysex messages sended to JV880
 Added indication of all original JV880 LEDs on 4x25 OLED Display
+Network added
 
 ToDo:
 
