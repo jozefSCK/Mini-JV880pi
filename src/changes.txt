@@ -7,6 +7,7 @@ Added synchronized MIDI parser
 Added Expanded ROM load at start (check .ini)
 Changed .bin loader
 Added save NVRAM via MIDI command (check .ini)
+Added save NVRAM GPIO button (check .ini)
 Added calculation checksum to Roland sysex messages sended to JV880
 Added indication of all original JV880 LEDs on 4x25 OLED Display
 Added network support
