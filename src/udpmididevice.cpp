@@ -51,8 +51,6 @@ CUDPMIDIDevice::~CUDPMIDIDevice()
 
 boolean CUDPMIDIDevice::Initialize()
 {
-    LOGNOTE("=== UDP MIDI Device Initialization ===");
-
     // === Initialize RTP-MIDI (Apple MIDI) ===
     // This is used by rtpMIDI on Windows and macOS
     m_pAppleMIDIParticipant = new CAppleMIDIParticipant(
@@ -67,7 +65,6 @@ boolean CUDPMIDIDevice::Initialize()
         m_pAppleMIDIParticipant = nullptr;
     } else {
         LOGNOTE("RTP-MIDI (Apple MIDI) listener initialized");
-        LOGNOTE("  -> Compatible with rtpMIDI (Windows/Mac)");
     }
 
     // === Initialize Simple UDP MIDI ===
@@ -114,7 +111,7 @@ boolean CUDPMIDIDevice::Initialize()
         LOGNOTE("Simple UDP MIDI is disabled in configuration");
     }
 
-    LOGNOTE("=== UDP MIDI Device Ready ===");
+    LOGNOTE("UDP MIDI Device Ready");
     return true;
 }
 
@@ -125,7 +122,7 @@ boolean CUDPMIDIDevice::Initialize()
 void CUDPMIDIDevice::OnAppleMIDIDataReceived(const u8* pData, size_t nSize)
 {
     // RTP-MIDI library already extracted pure MIDI from RTP packets
-    LOGDBG("RTP-MIDI RX: %u bytes", (unsigned)nSize);
+    //LOGDBG("RTP-MIDI RX: %u bytes", (unsigned)nSize);
     m_Parser.FeedSerialBytes(pData, nSize);
 }
 
@@ -158,6 +155,6 @@ void CUDPMIDIDevice::OnAppleMIDIDisconnect(const CIPAddress* pIPAddress, const c
 void CUDPMIDIDevice::OnUDPMIDIDataReceived(const u8* pData, size_t nSize)
 {
     // Simple UDP MIDI - raw MIDI bytes
-    LOGDBG("UDP-MIDI RX: %u bytes", (unsigned)nSize);
+    //LOGDBG("UDP-MIDI RX: %u bytes", (unsigned)nSize);
     m_Parser.FeedSerialBytes(pData, nSize);
 }
