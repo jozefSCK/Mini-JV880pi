@@ -145,6 +145,10 @@ void CConfig::Load (void)
 	m_nMIDIButtonUp = m_Properties.GetNumber("MIDIButtonUp", 0);
 	m_nMIDIButtonDown = m_Properties.GetNumber("MIDIButtonDown", 0);
 	m_nMIDISaveNVRAM = m_Properties.GetNumber("MIDISaveNVRAM", 0);
+	m_nMIDIEncoder = m_Properties.GetNumber("MIDIEncoder", 0);
+	m_nMIDIEncoderCC = m_Properties.GetNumber("MIDIEncoderCC", 0);
+	m_nMIDIEncoderUp = m_Properties.GetNumber("MIDIEncoderUp", 1);
+	m_nMIDIEncoderDown = m_Properties.GetNumber("MIDIEncoderDown", 0);
 
 	m_nDoubleClickTimeout = m_Properties.GetNumber ("DoubleClickTimeout", 400);
 	m_nLongPressTimeout = m_Properties.GetNumber ("LongPressTimeout", 600);
@@ -169,6 +173,8 @@ void CConfig::Load (void)
 	if (const u8 *pIP = m_Properties.GetIPAddress ("NetworkSyslogServerIPAddress")) m_INetworkSyslogServerIPAddress.Set (pIP);
 	m_bUDPMIDIEnabled = m_Properties.GetNumber("UDPMIDIEnabled", 0) != 0;
 	if (const u8 *pIP = m_Properties.GetIPAddress("UDPMIDIIPAddress")) m_IUDPMIDIIPAddress.Set (pIP);
+
+
 }
 
 unsigned CConfig::GetMCUcycles (void) const
@@ -609,6 +615,26 @@ unsigned CConfig::GetMIDIButtonDown (void) const
 unsigned CConfig::GetMIDISaveNVRAM (void) const
 {
     return m_nMIDISaveNVRAM;
+}
+
+unsigned CConfig::GetMIDIEncoder (void) const
+{
+    return m_nMIDIEncoder;
+}
+
+unsigned CConfig::GetMIDIEncoderCC (void) const
+{
+    return m_nMIDIEncoderCC;
+}
+
+unsigned CConfig::GetMIDIEncoderUp (void) const
+{
+    return m_nMIDIEncoderUp;
+}
+
+unsigned CConfig::GetMIDIEncoderDown (void) const
+{
+    return m_nMIDIEncoderDown;
 }
 
 bool CConfig::GetEncoderEnabled (void) const

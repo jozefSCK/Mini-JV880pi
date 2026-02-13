@@ -434,7 +434,7 @@ void CMiniJV880::HandleFullMIDIMessage(const uint8_t* pData, uint8_t nLength)
                 if (handleButton(m_UI.m_nMIDICompare,      CUIButton::BtnEventCompare)) return;
                 if (handleButton(m_UI.m_nMIDIEnter,        CUIButton::BtnEventEnter))   return;
 
-                // Encoder
+                // Encoder emulate by buttons
                 if (ccNumber == m_UI.m_nMIDIUp && ccValue < 64) {
                     m_UI.TriggerUIButtonEvent(CUIButton::BtnEventRelease);
                     mcu.MCU_EncoderTrigger(1);
@@ -444,6 +444,23 @@ void CMiniJV880::HandleFullMIDIMessage(const uint8_t* pData, uint8_t nLength)
                     m_UI.TriggerUIButtonEvent(CUIButton::BtnEventRelease);
                     mcu.MCU_EncoderTrigger(0);
                     return;
+                }
+                // MIDI encoder
+                if (m_UI.m_nMIDIEncoder) {
+                    if (ccNumber == m_UI.m_nMIDIEncoderCC) {
+                        if ((m_UI.m_nMIDIEncoderUp == 0 && ccValue < 64) || 
+                            (m_UI.m_nMIDIEncoderUp != 0 && ccValue > 64)) {
+                            m_UI.TriggerUIButtonEvent(CUIButton::BtnEventRelease);
+                            mcu.MCU_EncoderTrigger(1);
+                            return; 
+                        }
+                        if ((m_UI.m_nMIDIEncoderDown == 0 && ccValue < 64) || 
+                            (m_UI.m_nMIDIEncoderDown != 0 && ccValue > 64)) {
+                            m_UI.TriggerUIButtonEvent(CUIButton::BtnEventRelease);
+                            mcu.MCU_EncoderTrigger(0);
+                            return; 
+                        }
+                    }
                 }
             }
         }

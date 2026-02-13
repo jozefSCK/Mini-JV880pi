@@ -77,6 +77,10 @@ public:
 	unsigned m_nMIDIUp;
 	unsigned m_nMIDIDown;
 	unsigned m_nMIDISaveNVRAM;
+	unsigned m_nMIDIEncoder;
+	unsigned m_nMIDIEncoderCC;
+	unsigned m_nMIDIEncoderUp;
+	unsigned m_nMIDIEncoderDown;
 
 private:
 

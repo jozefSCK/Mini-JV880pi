@@ -165,6 +165,10 @@ public:
 	unsigned GetMIDIButtonUp (void) const;
 	unsigned GetMIDIButtonDown (void) const;
 	unsigned GetMIDISaveNVRAM (void) const;
+	unsigned GetMIDIEncoder (void) const;
+	unsigned GetMIDIEncoderCC (void) const;
+	unsigned GetMIDIEncoderUp (void) const;
+	unsigned GetMIDIEncoderDown (void) const;
 	
 	// Timeouts for button events in milliseconds
 	unsigned GetDoubleClickTimeout (void) const;
@@ -296,6 +300,10 @@ private:
     unsigned m_nMIDIButtonUp;
     unsigned m_nMIDIButtonDown;
 	unsigned m_nMIDISaveNVRAM;
+	unsigned m_nMIDIEncoder;
+	unsigned m_nMIDIEncoderCC;
+	unsigned m_nMIDIEncoderUp;
+	unsigned m_nMIDIEncoderDown;
 	unsigned m_nDoubleClickTimeout;
 	unsigned m_nLongPressTimeout;	
 
