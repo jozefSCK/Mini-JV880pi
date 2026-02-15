@@ -1,3 +1,29 @@
+//
+// ssd1306device24.h
+//
+// Mini-JV880pi - Roland JV880 synthesizer for bare metal Raspberry Pi
+// Copyright (C) 2026  Gene J.B. (Sterr1)
+//
+// Much of this driver is based on code from:
+//    mt32-pi - A baremetal MIDI synthesizer for Raspberry Pi
+//    Copyright (C) 2020-2022 Dale Whinham <daleyo@gmail.com>
+//
+// Circle - A C++ bare metal environment for Raspberry Pi
+// Copyright (C) 2018-2022  R. Stange <rsta2@o2online.de>
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+//
 #ifndef _display_ssd1306device24_h
 #define _display_ssd1306device24_h
 

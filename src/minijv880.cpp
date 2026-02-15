@@ -1,8 +1,9 @@
 //
 // minidexed.cpp
 //
-// MiniDexed - Dexed FM synthesizer for bare metal Raspberry Pi
+// Mini-JV880pi - Roland JV880 synthesizer for bare metal Raspberry Pi
 // Copyright (C) 2022  The MiniDexed Team
+// Copyright (C) 2026  Plamikcho, Giulioz, Gene J.B. (Sterr1)
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -208,7 +209,7 @@ bool CMiniJV880::Initialize(void) {
     if (!LoadMainRoms(m_pConfig->GetExpRom())) {
         return false;
     }
-    //LOGNOTE("waverom_exp addr: %p, rom.data addr: %p, size: %zu", mcu.pcm.waverom_exp, m_romInfos[m_pConfig->GetExpRom() + 6].data, EXP_SIZE);
+    
     int ret = 0;
 
     uint8_t* nvram = (uint8_t*)m_romInfos[0].data;  // jv880_nvram.bin
@@ -497,44 +498,37 @@ void CMiniJV880::HandleFullMIDIMessage(const uint8_t* pData, uint8_t nLength)
 void CMiniJV880::SaveNVRAMIncremental() {
     char filename[64];
     
-    // Ensure the directory exists first
     FRESULT dirRes = f_mkdir("nvram");
     if (dirRes != FR_OK && dirRes != FR_EXIST) {
         LOGERR("Cannot create nvram directory, error: %d", dirRes);
         return;
     }
     
-    // Find a free filename
     FIL file;
     FRESULT res;
     
     do {
         sprintf(filename, "nvram/jv880_nvram%d.bin", ++m_nNVRAMSaveCounter);
         
-        // Try to open file for reading to check if it exists
         res = f_open(&file, filename, FA_READ);
         if (res == FR_OK) {
             // File exists - close and try next number
             f_close(&file);
         }
-    } while (res == FR_OK); // Continue while we find existing files
+    } while (res == FR_OK); 
 
     m_UI.LCDMessage("Saving NVRAM file\njv880_nvram%d.bin", m_nNVRAMSaveCounter);
     
-    // Now filename contains a non-existing filename
-    // Open for writing
     res = f_open(&file, filename, FA_WRITE | FA_CREATE_ALWAYS);
     if (res != FR_OK) {
         LOGERR("Cannot open file %s for writing, error: %d", filename, res);
         return;
     }
     
-    // Write NVRAM data to file
     UINT bytesWritten;
     res = f_write(&file, mcu.nvram, 0x8000, &bytesWritten);
     f_close(&file);
     
-    // Check if write was successful
     if (res == FR_OK && bytesWritten == 0x8000) {
         LOGNOTE("NVRAM saved to %s", filename);
         m_UI.LCDMessage("Saved NVRAM file\njv880_nvram%d.bin", m_nNVRAMSaveCounter);
@@ -562,7 +556,6 @@ void CMiniJV880::Run(unsigned nCore) {
 
     if (nCore == 2) { // 2nd core - MCU + audio output
         const int MCU_INSTR_BURST = 64;
-        //unsigned log_counter = 0;
         while (true) {
             if (m_bAudioPaused.load(std::memory_order_acquire)) {
                 CTimer::SimpleMsDelay(1);
@@ -575,7 +568,6 @@ void CMiniJV880::Run(unsigned nCore) {
             }
             int nSamples = (int)nFrames * 2;
             if (nSamples >= (int)AUDIO_BUFFER_SIZE) nSamples = (int)AUDIO_BUFFER_SIZE - 2;
-            // allocate contiguous output buffer
             int16_t *out_buf = (int16_t*)malloc(nSamples * sizeof(int16_t));
             if (!out_buf) { CTimer::SimpleMsDelay(1); continue; }
             int out_pos = 0;
@@ -623,8 +615,7 @@ void CMiniJV880::Run(unsigned nCore) {
                     mcu.MCU_UpdateAnalog(mcu.mcu.cycles);
                     ++instr;
                 }
-                // then re-check available
-            } // out_pos loop
+            } 
 
             // write to audio device
             int len = nSamples * sizeof(int16_t);
@@ -638,11 +629,9 @@ void CMiniJV880::Run(unsigned nCore) {
         constexpr uint64_t MCU_CLOCK_HZ = 12000000ull; // if your MCU clock differs, set accordingly
         constexpr uint32_t AUDIO_RATE = 64000u;
         constexpr uint64_t CYCLES_PER_SAMPLE = MCU_CLOCK_HZ / AUDIO_RATE; // 375 typical for H8@12MHz
-        //constexpr uint64_t CYCLES_PER_SAMPLE_FP = CYCLES_PER_SAMPLE << 32; // fixed-point
         const uint32_t MAX_SAMPLES_PER_ITER = 128; // bound to avoid huge bursts
 
         uint64_t last_generated_cycles = __atomic_load_n(&mcu.mcu.cycles, __ATOMIC_RELAXED);
-        //uint64_t cycles_acc_fp = 0; // optional accumulator if needed by PCM internals
 
         while (true) {
             if (m_bAudioPaused.load(std::memory_order_acquire)) {
@@ -667,7 +656,6 @@ void CMiniJV880::Run(unsigned nCore) {
                 last_generated_cycles = pcm_target;
                 samples_to_gen -= gen;
 
-                // tiny yield to let consumer/core2 progress and reduce bursts
                 CTimer::SimpleMsDelay(0);
             }
         }
@@ -732,23 +720,18 @@ bool CMiniJV880::LoadRom(uint8_t rom_index) {
         return true;
     }
     
-    // Allocate memory
     rom.data = malloc(rom.size);
     if (!rom.data) {
         LOGERR("Not enough memory for %s (size: %zu)", fullPath.c_str(), rom.size);
         return false;
     }
     
-    // Load file
     if (!LoadFile(fullPath.c_str(), (uint8_t*)rom.data, rom.size)) {
         LOGERR("Cannot load %s", fullPath.c_str());
         free(rom.data);
         rom.data = nullptr;
         return false;
     }
-    
-    //LOGNOTE("Loaded %s successfully", fullPath.c_str());
-
     
     // Check if descrambling is needed
     if (rom.needsUnscramble) {
@@ -759,23 +742,18 @@ bool CMiniJV880::LoadRom(uint8_t rom_index) {
             rom.data = nullptr;
             return false;
         }
-        //LOGNOTE("Descrambling %s...", rom.filename);
         UnscrambleRom((uint8_t*)rom.data, descrambled_data, rom.size);
         free(rom.data);
         rom.data = descrambled_data;
-        //LOGNOTE("Descrambled %s successfully", rom.filename);
     }
     
-    // Mark as loaded
     LOGNOTE("Loaded file %s", rom.filename);
 
-    //m_UI.LCDMessage("Loaded Expanded\n%s", rom.filename);
     CTimer::SimpleMsDelay(300);
     rom.isLoaded = true;
     return true;
 }
 
-// Helper function to check if file exists
 bool CMiniJV880::FileExists(const char* filename) {
     FILE* file = fopen(filename, "rb");
     if (file) {
@@ -808,7 +786,6 @@ bool CMiniJV880::LoadFile(const char* filename, uint8_t* buffer, size_t size) {
 
     return true;
 }
-
 
 void CMiniJV880::UnscrambleRom(const uint8_t *src, uint8_t *dst, int len) {
     for (int i = 0; i < len; i++) {
@@ -896,7 +873,6 @@ void CMiniJV880::ParseAndAddMapping(const char* filename) {
 void CMiniJV880::switchPatchBank(int bankNumber) {
     if (bankNumber < 0 || bankNumber > 99) return;
     
-    // Find corresponding romIndex and nvram filename in mapping
     int romIndex = -1;
     const char* nvramFilename = nullptr;
     for (unsigned i = 0; i < m_bankMappingsCount; i++) {
@@ -907,13 +883,11 @@ void CMiniJV880::switchPatchBank(int bankNumber) {
         }
     }
     
-    // If not found in mapping, silently return
     if (romIndex == -1) {
         LOGNOTE("Bank %d not found in mapping", bankNumber);
         return;
     }
     
-    // Check ROM index bounds
     if (romIndex < 0 || (size_t)romIndex >= ROM_COUNT) {
         LOGERR("ROM index %d out of range for bank %d", romIndex, bankNumber);
         return;
@@ -936,21 +910,10 @@ void CMiniJV880::switchPatchBank(int bankNumber) {
         return;
     }
     
-    // Before pause
-    //size_t freeBefore = CMemorySystem::Get()->GetHeapFreeSpace(HEAP_ANY);
-    //uint64_t cyclesBefore = mcu.mcu.cycles;
-    //LOGNOTE("Before pause: cycles=%llu, free mem=%.2f MB", cyclesBefore, (float)freeBefore/(1024.0f*1024.0f));
-   
     // 1. Stop EVERYTHING
     m_bAudioPaused.store(true, std::memory_order_release);
     std::atomic_thread_fence(std::memory_order_seq_cst); // Ensure visible
     CTimer::SimpleMsDelay(300);  // Longer delay to ensure cores exit even from stuck MCU instructions
-
-    // State before reset
-    //LOGNOTE("MCU state: ex_ignore=%d, ga_int_enable=%d, sample_write=%llu, sample_read=%llu", 
-    //        mcu.mcu.ex_ignore, mcu.ga_int_enable, 
-    //        __atomic_load_n(&sample_write_idx, __ATOMIC_RELAXED),
-    //        __atomic_load_n(&sample_read_idx, __ATOMIC_RELAXED));
 
     mcu.mcu.ex_ignore = 1;  // Ignore interrupts
     mcu.ga_int_enable = 0;  // Disable interrupts
@@ -988,8 +951,6 @@ void CMiniJV880::switchPatchBank(int bankNumber) {
     // 4. Full reset (clears mcu.mcu.cycles!)
     mcu.SC55_Reset();
     CTimer::SimpleMsDelay(300);
-    //uint64_t cyclesAfterReset = mcu.mcu.cycles;
-    //LOGNOTE("After reset: cycles=%llu", cyclesAfterReset);
     
     // 5. CRITICAL: Zero sample_write_idx AFTER reset
     __atomic_store_n(&sample_write_idx, 0, __ATOMIC_RELEASE);
@@ -1023,6 +984,7 @@ return;
  return;
 }
 
+// Network functions
 void CMiniJV880::UpdateNetwork()
 {
 
@@ -1199,7 +1161,7 @@ bool CMiniJV880::InitNetwork()
 				delete m_WLAN; m_WLAN = nullptr; // Clean up WLAN if allocated
 				return false; // Return false as network init failed
 			} 
-			// WPASupplicant needs to be started after netdevice available
+
 			if (NetDeviceType == NetDeviceTypeWLAN)
 			{
 				LOGNOTE("CMiniJV880::InitNetwork: Initializing WPASupplicant");

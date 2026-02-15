@@ -1,8 +1,9 @@
 //
 // userinterface.cpp
 //
-// MiniDexed - Dexed FM synthesizer for bare metal Raspberry Pi
+// Mini-JV880pi - Roland JV880 synthesizer for bare metal Raspberry Pi
 // Copyright (C) 2022  The MiniDexed Team
+// Copyright (C) 2026  Plamikcho, Giulioz, Gene J.B. (Sterr1)
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -487,8 +488,8 @@ void CUserInterface::LCDMessage(const char* fmt, ...)
     if (nl)
     {
         *nl = '\0'; // Split at newline
-        g_ServiceLine[0].Format("%s", buf);      // Copy first line
-        g_ServiceLine[1].Format("%s", nl + 1);   // Copy second line
+        g_ServiceLine[0].Format("%s", buf);      
+        g_ServiceLine[1].Format("%s", nl + 1);   
     }
     else
     {

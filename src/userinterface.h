@@ -1,8 +1,9 @@
 //
 // userinterface.h
 //
-// MiniDexed - Dexed FM synthesizer for bare metal Raspberry Pi
+// Mini-JV880pi - Roland JV880 synthesizer for bare metal Raspberry Pi
 // Copyright (C) 2022  The MiniDexed Team
+// Copyright (C) 2026  Plamikcho, Giulioz, Gene J.B. (Sterr1)
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -108,13 +109,13 @@ private:
 	bool m_bSwitchPressed;
 	u8 *screen_buffer;
 
-	uint8_t m_lastLCDData[80] = {0}; //test
+	uint8_t m_lastLCDData[80] = {0}; 
 
 	unsigned m_lastTick;
 	int m_scrollPosition[2] = {0, 0};
 	int m_scrollDir[2] = {+1, +1}; 
 	unsigned long m_lastScrollTime = 0;
-	bool isPaused[2] = {true, true};  // Start paused
+	bool isPaused[2] = {true, true};  
 	bool isAtEnd[2] = {false, false};
 	unsigned long pauseStartTime[2] = {0, 0};
 	

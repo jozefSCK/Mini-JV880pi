@@ -1,8 +1,9 @@
 //
 // config.cpp
 //
-// MiniDexed - Dexed FM synthesizer for bare metal Raspberry Pi
+// Mini-JV880pi - Roland JV880 synthesizer for bare metal Raspberry Pi
 // Copyright (C) 2022  The MiniDexed Team
+// Copyright (C) 2026  Plamikcho, Giulioz, Gene J.B. (Sterr1)
 //
 // Original author of this class:
 //	R. Stange <rsta2@o2online.de>

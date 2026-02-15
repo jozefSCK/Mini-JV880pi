@@ -3,9 +3,22 @@
 //
 // Mini-JV880pi UDP MIDI Device (with RTP-MIDI support)
 // Based on MiniDexed implementation
-// Copyright (C) 2026  Gene J.B. (Sterr1)
+// Copyright (C) 2022  The MiniDexed Team
+// Copyright (C) 2026  Plamikcho, Giulioz, Gene J.B. (Sterr1)
 //
-
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+//
 #ifndef _udpmididevice_h
 #define _udpmididevice_h
 

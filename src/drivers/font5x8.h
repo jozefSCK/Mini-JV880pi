@@ -1,25 +1,23 @@
 //
 // font5x8.h
 //
-// mt32-pi - A baremetal MIDI synthesizer for Raspberry Pi
-// Copyright (C) 2020-2022 Dale Whinham <daleyo@gmail.com>
+// Mini-JV880pi - Roland JV880 synthesizer for bare metal Raspberry Pi
+// Copyright (C) 2022  The MiniDexed Team
+// Copyright (C) 2026  Gene J.B. (Sterr1)
 //
-// This file is part of mt32-pi.
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-// mt32-pi is free software: you can redistribute it and/or modify it under the
-// terms of the GNU General Public License as published by the Free Software
-// Foundation, either version 3 of the License, or (at your option) any later
-// version.
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
 //
-// mt32-pi is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
-// details.
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
-// You should have received a copy of the GNU General Public License along with
-// mt32-pi. If not, see <http://www.gnu.org/licenses/>.
-//
-
 #ifndef _font5x8_h
 #define _font5x8_h
 

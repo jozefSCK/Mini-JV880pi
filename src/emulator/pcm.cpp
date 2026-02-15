@@ -1,6 +1,8 @@
 /*
  * Copyright (C) 2021, 2024 nukeykt
  *
+ * Refactored in 2026  Gene J.B. (Sterr1)
+ *
  *  Redistribution and use of this code or any derivative works are permitted
  *  provided that the following conditions are met:
  *
