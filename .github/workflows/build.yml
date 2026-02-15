@@ -6,57 +6,48 @@ env:
 on:
   push:
     branches: [ main ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
 
 jobs:
   Build:
-
     runs-on: ubuntu-20.04
 
     steps:
     - uses: actions/checkout@v2
+    
     - name: Get specific commits of git submodules
-      run: |
-           sh -ex ./submod.sh
+      run: sh -ex ./submod.sh
+      
     - name: Install toolchains
       run: |
            set -ex
            wget -q https://developer.arm.com/-/media/Files/downloads/gnu-a/10.3-2021.07/binrel/gcc-arm-10.3-2021.07-x86_64-aarch64-none-elf.tar.xz
            tar xf *-aarch64-none-elf.tar.xz
-           wget -q https://developer.arm.com/-/media/Files/downloads/gnu-a/10.3-2021.07/binrel/gcc-arm-10.3-2021.07-x86_64-arm-none-eabi.tar.xz
-           tar xf *-arm-none-eabi.tar.xz
            mkdir -p kernels
+           
     - name: Build for Raspberry Pi 5
       run: |
            set -ex
            export PATH=$(readlink -f ./gcc-*aarch64-none*/bin/):$PATH
            RPI=5 bash -ex build.sh
            cp ./src/kernel*.img ./kernels/
+           
     - name: Build for Raspberry Pi 4
       run: |
            set -ex
            export PATH=$(readlink -f ./gcc-*aarch64-none*/bin/):$PATH
            RPI=4 bash -ex build.sh
            cp ./src/kernel*.img ./kernels/
+           
     - name: Build for Raspberry Pi 3
       run: |
            set -ex
            export PATH=$(readlink -f ./gcc-*aarch64-none*/bin/):$PATH
            RPI=3 bash -ex build.sh
            cp ./src/kernel*.img ./kernels/
-    # - name: Build for Raspberry Pi 2
-    #   run: |
-    #        set -ex
-    #        export PATH=$(readlink -f ./gcc-*arm-none*/bin/):$PATH
-    #        RPI=2 bash -ex build.sh
-    #        cp ./src/kernel*.img ./kernels/
-    # - name: Build for Raspberry Pi 1
-    #   run: |
-    #        set -ex
-    #        export PATH=$(readlink -f ./gcc-*arm-none*/bin/):$PATH
-    #        RPI=1 bash -ex build.sh
-    #        cp ./src/kernel*.img ./kernels/
+           
     - name: Get Raspberry Pi boot files
       run: |
            set -ex
@@ -73,20 +64,40 @@ jobs:
            cd sdcard
            cp ../kernels/* . || true
            cd -
-    - name: Generate zip file
+           
+    - name: Generate zip file with checksum
       run: |
            cd sdcard
-           zip -r ../MiniJV880_$GITHUB_RUN_NUMBER_$(date +%Y-%m-%d)-$(git rev-parse --short HEAD).zip *
-           echo "artifactName=MiniJV880_$GITHUB_RUN_NUMBER_$(date +%Y-%m-%d)-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-           cd -
+           VERSION="${GITHUB_REF_NAME:-$(date +%Y%m%d)}-$(git rev-parse --short HEAD)"
+           ZIP_NAME="MiniJV880_${VERSION}.zip"
+           zip -r ../${ZIP_NAME} *
+           cd ..
+           sha256sum ${ZIP_NAME} > ${ZIP_NAME}.sha256
+           echo "artifactName=${ZIP_NAME}" >> $GITHUB_ENV
+           
     - uses: actions/upload-artifact@v3
       with:
-        name: ${{ env.artifactName }} # Exported above
-        path: ./sdcard/*
-    - name: Upload to GitHub Releases (only when building from main branch)
-      if: ${{ github.ref == 'refs/heads/main' }}
+        name: ${{ env.artifactName }}
+        path: |
+          ./MiniJV880*.zip
+          ./MiniJV880*.sha256
+          
+    - name: Upload to GitHub Releases
+      if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+      env:
+        UPLOADTOOL_BODY: |
+          🎹 MiniJV880 Build
+          
+          **Build Info:**
+          - Commit: ${{ github.sha }}
+          - Build #: ${{ github.run_number }}
+          
+          **Supported boards:**
+          - Raspberry Pi 5
+          - Raspberry Pi 4
+          - Raspberry Pi 3
+          
+          **Installation:** Extract to SD card root
       run: |
            set -ex
-           wget -c https://github.com/probonopd/uploadtool/raw/master/upload.sh
-           bash ./upload.sh ./MiniJV880*.zip
-           
+           bash .github/scripts/upload.sh ./Mini-JV880pi*.zip ./Mini-JV880pi*.sha256
