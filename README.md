@@ -1,4 +1,4 @@
-# MiniJV880 ![Github Build Status](https://github.com/giulioz/mini-jv880/actions/workflows/build.yml/badge.svg)
+# MiniJV880 ![Github Build Status](https://github.com/Sterr1/Mini-JV880pi/actions/workflows/build.yml/badge.svg)
 
 ![JV880](https://github.com/user-attachments/assets/04f92b10-9d01-4172-8356-1d199547d564)
 
