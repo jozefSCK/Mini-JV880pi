@@ -1,5 +1,5 @@
 1.1.0
-Fixed buttons send to NukedSC55
+Fixed buttons send to Nuked SC55
 Turned on internal resampler to 64 khz
 Sound driver switched to 64 khz
 Added Up and Down buttons if no encoder (check .ini)
