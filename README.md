@@ -4,6 +4,9 @@
 
 Mini-JV880pi is a rompler-style synthesizer closely modeled on the famous JV-880 by a well-known Japanese manufacturer running on a bare metal Raspberry Pi (without a Linux kernel or operating system).
 
+[![JV880video1-640yt копия](https://github.com/user-attachments/assets/2f8b8c20-589c-4205-803d-ac27dbdee953)](https://www.youtube.com/watch?v=BBrIYO_e8jA)
+
+
 ## Acknowledgements
 
 This project stands on the shoulders of giants. Special thanks to:
