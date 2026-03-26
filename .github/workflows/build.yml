@@ -75,7 +75,7 @@ jobs:
            sha256sum ${ZIP_NAME} > ${ZIP_NAME}.sha256
            echo "artifactName=${ZIP_NAME}" >> $GITHUB_ENV
            
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: ${{ env.artifactName }}
         path: |
