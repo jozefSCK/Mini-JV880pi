@@ -16,3 +16,9 @@ cd -
 #cd circle-stdlib/libs/circle-newlib
 #git checkout develop
 #cd -
+# Tvoja úprava pre KY-040 (cesta začína v src/)
+echo "Kopirujem vylepseny ky040 kod zo src/custom_circle..."
+cp src/custom_circle/ky040.cpp circle-stdlib/libs/circle/lib/input/ky040.cpp
+cp src/custom_circle/ky040.h circle-stdlib/libs/circle/include/circle/input/ky040.h
+
+echo "Hotovo, pokracujem v builde."
