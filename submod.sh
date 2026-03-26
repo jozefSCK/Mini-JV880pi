@@ -22,3 +22,4 @@ cp src/custom_circle/ky040.cpp circle-stdlib/libs/circle/lib/input/ky040.cpp
 cp src/custom_circle/ky040.h circle-stdlib/libs/circle/include/circle/input/ky040.h
 
 echo "Hotovo, pokracujem v builde."
+#spusti:-)
